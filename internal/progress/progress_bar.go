@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,78 @@ import (
 
 	"github.com/fatih/color"
 	"golang.org/x/term"
+)
+
+// ProgressBarTheme defines visual styling for progress bars
+type ProgressBarTheme struct {
+	FilledChar   string
+	EmptyChar    string
+	FilledColor  color.Attribute
+	EmptyColor   color.Attribute
+	PercentColor color.Attribute
+	SpeedColor   color.Attribute
+	ETAColor     color.Attribute
+	LabelColor   color.Attribute
+	ErrorColor   color.Attribute
+	PauseColor   color.Attribute
+}
+
+// EventType represents different progress bar events
+type EventType int
+
+const (
+	EventStart EventType = iota
+	EventUpdate
+	EventPause
+	EventResume
+	EventComplete
+	EventError
+	EventFinish
+)
+
+// EventCallback is a function that gets called on progress bar events
+type EventCallback func(event EventType, pb *ProgressBar, data interface{})
+
+// Predefined themes
+var (
+	DefaultTheme = ProgressBarTheme{
+		FilledChar:   "█",
+		EmptyChar:    "░",
+		FilledColor:  color.FgGreen,
+		EmptyColor:   color.FgWhite,
+		PercentColor: color.FgCyan,
+		SpeedColor:   color.FgYellow,
+		ETAColor:     color.FgMagenta,
+		LabelColor:   color.FgBlue,
+		ErrorColor:   color.FgRed,
+		PauseColor:   color.FgYellow,
+	}
+
+	RainbowTheme = ProgressBarTheme{
+		FilledChar:   "█",
+		EmptyChar:    "░",
+		FilledColor:  color.FgMagenta,
+		EmptyColor:   color.FgWhite,
+		PercentColor: color.FgCyan,
+		SpeedColor:   color.FgYellow,
+		ETAColor:     color.FgGreen,
+		LabelColor:   color.FgBlue,
+		ErrorColor:   color.FgRed,
+		PauseColor:   color.FgYellow,
+	}
+
+	MinimalTheme = ProgressBarTheme{
+		FilledChar:   "=",
+		EmptyChar:    "-",
+		FilledColor:  color.FgBlue,
+		EmptyColor:   color.FgWhite,
+		PercentColor: color.FgWhite,
+		SpeedColor:   color.FgWhite,
+		ETAColor:     color.FgWhite,
+		LabelColor:   color.FgWhite,
+		ErrorColor:   color.FgRed,
+		PauseColor:   color.FgYellow,
+	}
 )
 
 // ProgressBarInterface defines the interface for progress bars (for testing)
@@ -90,6 +163,19 @@ type ProgressBar struct {
 	adaptiveRefresh bool
 	lastSpeed       int64
 	refreshHistory  []time.Duration
+
+	// Custom themes and event hooks
+	theme          ProgressBarTheme
+	eventCallbacks map[EventType][]EventCallback
+
+	// Concurrency optimizations
+	updateChannel  chan int64
+	displayChannel chan bool
+	stopChannel    chan bool
+
+	// Dynamic resizing
+	resizeChannel chan struct{}
+	originalWidth int
 }
 
 // TerminalCapabilities represents terminal capabilities
@@ -115,6 +201,9 @@ type ProgressBarConfig struct {
 	StateFile       string
 	Persistent      bool
 	AdaptiveRefresh bool
+	Theme           *ProgressBarTheme
+	EventCallbacks  map[EventType][]EventCallback
+	EnableChannels  bool
 }
 
 // MultiProgressManager manages multiple progress bars with persistent state
@@ -217,6 +306,9 @@ func NewProgressBar(total int64, config *ProgressBarConfig) *ProgressBar {
 			MultiBarIndex:   0,
 			Persistent:      false,
 			AdaptiveRefresh: true,
+			Theme:           &DefaultTheme,
+			EventCallbacks:  make(map[EventType][]EventCallback),
+			EnableChannels:  false,
 		}
 	}
 
@@ -262,6 +354,34 @@ func NewProgressBar(total int64, config *ProgressBarConfig) *ProgressBar {
 		adaptiveRefresh: config.AdaptiveRefresh,
 		lastSpeed:       0,
 		refreshHistory:  make([]time.Duration, 0, 10),
+		theme:           DefaultTheme,
+		eventCallbacks:  make(map[EventType][]EventCallback),
+		originalWidth:   config.Width,
+	}
+
+	// Initialize channels for concurrency optimization
+	if config.EnableChannels {
+		pb.updateChannel = make(chan int64, 100)
+		pb.displayChannel = make(chan bool, 10)
+		pb.stopChannel = make(chan bool, 1)
+		pb.resizeChannel = make(chan struct{}, 1)
+
+		// Start background goroutines
+		go pb.updateWorker()
+		go pb.displayWorker()
+		go pb.resizeWorker()
+	}
+
+	// Set theme if provided
+	if config.Theme != nil {
+		pb.theme = *config.Theme
+	}
+
+	// Copy event callbacks
+	if config.EventCallbacks != nil {
+		for eventType, callbacks := range config.EventCallbacks {
+			pb.eventCallbacks[eventType] = callbacks
+		}
 	}
 
 	// Load persistent state if enabled
@@ -269,16 +389,32 @@ func NewProgressBar(total int64, config *ProgressBarConfig) *ProgressBar {
 		pb.loadState()
 	}
 
+	// Trigger start event
+	pb.triggerEvent(EventStart, nil)
+
 	return pb
 }
 
 // Update updates the progress bar with new current value
 func (pb *ProgressBar) Update(current int64) {
-	pb.mutex.Lock()
-	defer pb.mutex.Unlock()
-
-	pb.current = current
-	pb.lastUpdate = time.Now()
+	if pb.updateChannel != nil {
+		// Use channel for concurrency optimization
+		select {
+		case pb.updateChannel <- current:
+		default:
+			// Channel full, fall back to direct update
+			pb.mutex.Lock()
+			pb.current = current
+			pb.lastUpdate = time.Now()
+			pb.mutex.Unlock()
+		}
+	} else {
+		// Direct update for non-channel mode
+		pb.mutex.Lock()
+		pb.current = current
+		pb.lastUpdate = time.Now()
+		pb.mutex.Unlock()
+	}
 }
 
 // Add adds to the current progress
@@ -305,6 +441,8 @@ func (pb *ProgressBar) Finish() {
 
 	pb.current = pb.total
 	pb.done = true
+	pb.triggerEvent(EventComplete, nil)
+	pb.triggerEvent(EventFinish, nil)
 }
 
 // SetError sets an error state for the progress bar
@@ -315,6 +453,7 @@ func (pb *ProgressBar) SetError(message string) {
 	pb.errorOccurred = true
 	pb.errorMessage = message
 	pb.done = false
+	pb.triggerEvent(EventError, message)
 }
 
 // ClearError clears any error state
@@ -340,6 +479,7 @@ func (pb *ProgressBar) Pause() {
 		pb.mutex.Lock()
 		pb.pauseTime = time.Now()
 		pb.mutex.Unlock()
+		pb.triggerEvent(EventPause, nil)
 	}
 }
 
@@ -352,6 +492,7 @@ func (pb *ProgressBar) Resume() {
 			pb.pauseTime = time.Time{}
 		}
 		pb.mutex.Unlock()
+		pb.triggerEvent(EventResume, nil)
 	}
 }
 
@@ -527,6 +668,104 @@ func (pb *ProgressBar) shouldUpdateAdaptive() bool {
 	return false
 }
 
+// triggerEvent calls all registered callbacks for an event
+func (pb *ProgressBar) triggerEvent(event EventType, data interface{}) {
+	if pb.eventCallbacks == nil {
+		return
+	}
+
+	callbacks, exists := pb.eventCallbacks[event]
+	if !exists {
+		return
+	}
+
+	for _, callback := range callbacks {
+		go func(cb EventCallback) {
+			defer func() {
+				if r := recover(); r != nil {
+					// Ignore panics in event callbacks
+				}
+			}()
+			cb(event, pb, data)
+		}(callback)
+	}
+}
+
+// updateWorker processes updates from the channel
+func (pb *ProgressBar) updateWorker() {
+	for {
+		select {
+		case current := <-pb.updateChannel:
+			pb.mutex.Lock()
+			pb.current = current
+			pb.lastUpdate = time.Now()
+			pb.mutex.Unlock()
+
+			pb.triggerEvent(EventUpdate, current)
+
+			// Trigger display update
+			select {
+			case pb.displayChannel <- true:
+			default:
+			}
+
+		case <-pb.stopChannel:
+			return
+		}
+	}
+}
+
+// displayWorker handles display updates
+func (pb *ProgressBar) displayWorker() {
+	ticker := time.NewTicker(pb.refreshRate)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-pb.displayChannel:
+			pb.Display()
+		case <-ticker.C:
+			pb.Display()
+		case <-pb.stopChannel:
+			return
+		}
+	}
+}
+
+// resizeWorker handles terminal resize events
+func (pb *ProgressBar) resizeWorker() {
+	for {
+		select {
+		case <-pb.resizeChannel:
+			pb.handleResize()
+		case <-pb.stopChannel:
+			return
+		}
+	}
+}
+
+// handleResize adjusts the progress bar width based on terminal size
+func (pb *ProgressBar) handleResize() {
+	if pb.terminalCaps == nil {
+		return
+	}
+
+	newWidth, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		return
+	}
+
+	// Adjust width, keeping some margin
+	adjustedWidth := newWidth - 20
+	if adjustedWidth < 10 {
+		adjustedWidth = 10
+	}
+
+	pb.mutex.Lock()
+	pb.width = adjustedWidth
+	pb.mutex.Unlock()
+}
+
 // NewMultiProgressManager creates a new multi-progress manager with enhanced features
 func NewMultiProgressManager() *MultiProgressManager {
 	return &MultiProgressManager{
@@ -646,7 +885,7 @@ func (pb *ProgressBar) Display() {
 	// Handle error display
 	if errorOccurred {
 		if pb.colorEnabled && pb.terminalCaps.SupportsColor {
-			color.New(color.FgRed, color.Bold).Printf("\r\033[K❌ Error: %s", errorMessage)
+			color.New(pb.theme.ErrorColor, color.Bold).Printf("\r\033[K❌ Error: %s", errorMessage)
 		} else {
 			fmt.Printf("\r\033[K❌ Error: %s", errorMessage)
 		}
@@ -656,7 +895,7 @@ func (pb *ProgressBar) Display() {
 	// Handle paused display
 	if paused {
 		if pb.colorEnabled && pb.terminalCaps.SupportsColor {
-			color.New(color.FgYellow, color.Bold).Printf("\r\033[K⏸️ Paused: %s", pb.customLabel)
+			color.New(pb.theme.PauseColor, color.Bold).Printf("\r\033[K⏸️ Paused: %s", pb.customLabel)
 		} else {
 			fmt.Printf("\r\033[K⏸️ Paused: %s", pb.customLabel)
 		}
@@ -675,15 +914,14 @@ func (pb *ProgressBar) Display() {
 		filledWidth = pb.width
 	}
 
-	// Build progress bar with colors
+	// Build progress bar with custom theme
 	var bar string
 	if pb.colorEnabled && pb.terminalCaps.SupportsColor {
-		// Green for progress, gray for remaining
-		greenBar := color.New(color.FgGreen).Sprint(strings.Repeat("█", filledWidth))
-		grayBar := color.New(color.FgWhite).Sprint(strings.Repeat("░", pb.width-filledWidth))
-		bar = greenBar + grayBar
+		filledBar := color.New(pb.theme.FilledColor).Sprint(strings.Repeat(pb.theme.FilledChar, filledWidth))
+		emptyBar := color.New(pb.theme.EmptyColor).Sprint(strings.Repeat(pb.theme.EmptyChar, pb.width-filledWidth))
+		bar = filledBar + emptyBar
 	} else {
-		bar = strings.Repeat("█", filledWidth) + strings.Repeat("░", pb.width-filledWidth)
+		bar = strings.Repeat(pb.theme.FilledChar, filledWidth) + strings.Repeat(pb.theme.EmptyChar, pb.width-filledWidth)
 	}
 
 	// Build status line
@@ -696,7 +934,7 @@ func (pb *ProgressBar) Display() {
 			if done {
 				percentStr = color.New(color.FgGreen, color.Bold).Sprintf("%.1f%%", percent)
 			} else {
-				percentStr = color.New(color.FgCyan).Sprintf("%.1f%%", percent)
+				percentStr = color.New(pb.theme.PercentColor).Sprintf("%.1f%%", percent)
 			}
 		} else {
 			percentStr = fmt.Sprintf("%.1f%%", percent)
@@ -729,7 +967,7 @@ func (pb *ProgressBar) Display() {
 		if speed > 0 {
 			var speedStr string
 			if pb.colorEnabled && pb.terminalCaps.SupportsColor {
-				speedStr = color.New(color.FgYellow).Sprintf("%s/s", formatBytes(speed))
+				speedStr = color.New(pb.theme.SpeedColor).Sprintf("%s/s", formatBytes(speed))
 			} else {
 				speedStr = fmt.Sprintf("%s/s", formatBytes(speed))
 			}
@@ -743,7 +981,7 @@ func (pb *ProgressBar) Display() {
 		if eta > 0 {
 			var etaStr string
 			if pb.colorEnabled && pb.terminalCaps.SupportsColor {
-				etaStr = color.New(color.FgMagenta).Sprintf("ETA: %s", formatDuration(eta))
+				etaStr = color.New(pb.theme.ETAColor).Sprintf("ETA: %s", formatDuration(eta))
 			} else {
 				etaStr = fmt.Sprintf("ETA: %s", formatDuration(eta))
 			}
@@ -755,7 +993,7 @@ func (pb *ProgressBar) Display() {
 	if pb.customLabel != "" {
 		var labelStr string
 		if pb.colorEnabled && pb.terminalCaps.SupportsColor {
-			labelStr = color.New(color.FgBlue).Sprint(pb.customLabel)
+			labelStr = color.New(pb.theme.LabelColor).Sprint(pb.customLabel)
 		} else {
 			labelStr = pb.customLabel
 		}
@@ -823,6 +1061,90 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.0fm", d.Minutes())
 	}
 	return fmt.Sprintf("%.1fh", d.Hours())
+}
+
+// DownloadFileWithProgress downloads a file from URL with real HTTP and progress tracking
+func DownloadFileWithProgress(url, filename string, config *ProgressBarConfig) error {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Start HTTP request
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("failed to start download: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status: %s", resp.Status)
+	}
+
+	// Get content length
+	contentLength := resp.ContentLength
+	if contentLength <= 0 {
+		return fmt.Errorf("unknown content length")
+	}
+
+	// Create progress bar
+	if config == nil {
+		config = &ProgressBarConfig{
+			Width:          50,
+			ShowPercent:    true,
+			ShowSpeed:      true,
+			ShowETA:        true,
+			CustomLabel:    filename,
+			RefreshRate:    100 * time.Millisecond,
+			ColorEnabled:   true,
+			Theme:          &DefaultTheme,
+			EnableChannels: true,
+		}
+	}
+
+	pb := NewProgressBar(contentLength, config)
+
+	// Create output file
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %v", err)
+	}
+	defer file.Close()
+
+	// Download with progress tracking
+	buffer := make([]byte, 32*1024) // 32KB buffer
+	totalRead := int64(0)
+
+	for {
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			// Write to file
+			if _, writeErr := file.Write(buffer[:n]); writeErr != nil {
+				pb.SetError(fmt.Sprintf("write error: %v", writeErr))
+				return writeErr
+			}
+
+			// Update progress
+			totalRead += int64(n)
+			pb.Update(totalRead)
+		}
+
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			pb.SetError(fmt.Sprintf("read error: %v", err))
+			return err
+		}
+	}
+
+	// Finish progress bar
+	pb.Finish()
+	pb.Display()
+	fmt.Println()
+
+	return nil
 }
 
 // ProgressWriter wraps an io.Writer to show progress

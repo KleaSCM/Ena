@@ -266,8 +266,8 @@ func (sh *SystemHooks) HandleDownload(args []string) (string, error) {
 	url := args[0]
 	filename := args[1]
 
-	// Download with progress bar
-	err := progress.DownloadWithProgress(url, filename)
+	// Download with real HTTP and progress bar
+	err := progress.DownloadFileWithProgress(url, filename, nil)
 	if err != nil {
 		return "", fmt.Errorf("Failed to download file: %v", err)
 	}
@@ -316,6 +316,21 @@ func (sh *SystemHooks) HandlePauseResume(args []string) (string, error) {
 	case "test":
 		// Test terminal compatibility
 		return sh.testTerminalCompatibility()
+	case "state":
+		// Test state persistence
+		return sh.testStatePersistence()
+	case "adaptive":
+		// Test adaptive refresh
+		return sh.testAdaptiveRefresh()
+	case "theme":
+		// Test custom themes
+		return sh.testCustomThemes()
+	case "events":
+		// Test event hooks
+		return sh.testEventHooks()
+	case "http":
+		// Test real HTTP download
+		return sh.testHttpDownload()
 	default:
 		return "", fmt.Errorf("Unknown pause/resume operation: %s", operation)
 	}
@@ -374,6 +389,223 @@ func (sh *SystemHooks) testTerminalCompatibility() (string, error) {
 	result += fmt.Sprintf("  Is Dumb Terminal: %t\n", caps.IsDumb)
 
 	return result, nil
+}
+
+// testStatePersistence tests JSON state persistence
+func (sh *SystemHooks) testStatePersistence() (string, error) {
+	// Create a progress bar with persistent state
+	pb := progress.NewProgressBar(100, &progress.ProgressBarConfig{
+		Width:       30,
+		ShowPercent: true,
+		CustomLabel: "State Test",
+		RefreshRate: 50 * time.Millisecond,
+		StateFile:   "/tmp/state_test.json",
+		Persistent:  true,
+	})
+
+	// Update progress to 50%
+	pb.Update(50)
+	pb.Display()
+
+	// Save state
+	if err := pb.SaveState(); err != nil {
+		return "", fmt.Errorf("failed to save state: %v", err)
+	}
+
+	// Create a new progress bar and load state
+	pb2 := progress.NewProgressBar(100, &progress.ProgressBarConfig{
+		Width:       30,
+		ShowPercent: true,
+		CustomLabel: "State Test (Loaded)",
+		RefreshRate: 50 * time.Millisecond,
+		StateFile:   "/tmp/state_test.json",
+		Persistent:  true,
+	})
+
+	pb2.Display()
+	fmt.Println()
+
+	// Clean up
+	os.Remove("/tmp/state_test.json")
+
+	return "State persistence test completed! ✨", nil
+}
+
+// testAdaptiveRefresh tests adaptive refresh functionality
+func (sh *SystemHooks) testAdaptiveRefresh() (string, error) {
+	// Create a progress bar with adaptive refresh
+	pb := progress.NewProgressBar(1000, &progress.ProgressBarConfig{
+		Width:           40,
+		ShowPercent:     true,
+		ShowSpeed:       true,
+		CustomLabel:     "Adaptive Refresh Test",
+		RefreshRate:     50 * time.Millisecond,
+		AdaptiveRefresh: true,
+	})
+
+	fmt.Println("🎯 Adaptive Refresh Test - Speed will vary to test adaptive updates")
+
+	// Simulate varying speeds
+	for i := int64(0); i <= 1000; i += 5 {
+		pb.Update(i)
+		pb.Display()
+
+		// Vary the delay to simulate different speeds
+		if i < 200 {
+			time.Sleep(10 * time.Millisecond) // Fast
+		} else if i < 500 {
+			time.Sleep(50 * time.Millisecond) // Medium
+		} else if i < 800 {
+			time.Sleep(100 * time.Millisecond) // Slow
+		} else {
+			time.Sleep(20 * time.Millisecond) // Fast again
+		}
+	}
+
+	pb.Finish()
+	pb.Display()
+	fmt.Println()
+
+	return "Adaptive refresh test completed! ✨", nil
+}
+
+// testCustomThemes tests different progress bar themes
+func (sh *SystemHooks) testCustomThemes() (string, error) {
+	themes := []struct {
+		name  string
+		theme *progress.ProgressBarTheme
+	}{
+		{"Default", &progress.DefaultTheme},
+		{"Rainbow", &progress.RainbowTheme},
+		{"Minimal", &progress.MinimalTheme},
+	}
+
+	fmt.Println("🎨 Custom Themes Demo - Different visual styles")
+
+	for _, t := range themes {
+		fmt.Printf("\n%s Theme:\n", t.name)
+
+		pb := progress.NewProgressBar(100, &progress.ProgressBarConfig{
+			Width:          40,
+			ShowPercent:    true,
+			ShowSpeed:      true,
+			CustomLabel:    t.name + " Theme",
+			RefreshRate:    50 * time.Millisecond,
+			Theme:          t.theme,
+			EnableChannels: true,
+		})
+
+		// Simulate progress
+		for i := int64(0); i <= 100; i += 5 {
+			pb.Update(i)
+			pb.Display()
+			time.Sleep(30 * time.Millisecond)
+		}
+
+		pb.Finish()
+		pb.Display()
+		fmt.Println()
+	}
+
+	return "Custom themes demo completed! ✨", nil
+}
+
+// testEventHooks tests event callback functionality
+func (sh *SystemHooks) testEventHooks() (string, error) {
+	fmt.Println("🎯 Event Hooks Demo - Callbacks for different events")
+
+	// Create event callbacks
+	callbacks := map[progress.EventType][]progress.EventCallback{
+		progress.EventStart: {
+			func(event progress.EventType, pb *progress.ProgressBar, data interface{}) {
+				fmt.Println("🚀 Started!")
+			},
+		},
+		progress.EventUpdate: {
+			func(event progress.EventType, pb *progress.ProgressBar, data interface{}) {
+				if data != nil {
+					current := data.(int64)
+					if current%25 == 0 {
+						fmt.Printf("📊 Milestone: %d%%\n", current)
+					}
+				}
+			},
+		},
+		progress.EventPause: {
+			func(event progress.EventType, pb *progress.ProgressBar, data interface{}) {
+				fmt.Println("⏸️ Paused!")
+			},
+		},
+		progress.EventResume: {
+			func(event progress.EventType, pb *progress.ProgressBar, data interface{}) {
+				fmt.Println("▶️ Resumed!")
+			},
+		},
+		progress.EventComplete: {
+			func(event progress.EventType, pb *progress.ProgressBar, data interface{}) {
+				fmt.Println("🎉 Completed!")
+			},
+		},
+	}
+
+	pb := progress.NewProgressBar(100, &progress.ProgressBarConfig{
+		Width:          40,
+		ShowPercent:    true,
+		CustomLabel:    "Event Demo",
+		RefreshRate:    50 * time.Millisecond,
+		EventCallbacks: callbacks,
+		EnableChannels: true,
+	})
+
+	// Simulate progress with pause
+	for i := int64(0); i <= 100; i += 10 {
+		pb.Update(i)
+		pb.Display()
+
+		if i == 50 {
+			pb.Pause()
+			time.Sleep(1 * time.Second)
+			pb.Resume()
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	pb.Finish()
+	pb.Display()
+	fmt.Println()
+
+	return "Event hooks demo completed! ✨", nil
+}
+
+// testHttpDownload tests real HTTP download functionality
+func (sh *SystemHooks) testHttpDownload() (string, error) {
+	fmt.Println("🌐 Real HTTP Download Demo")
+
+	// Use a small test file
+	testURL := "https://httpbin.org/bytes/1024" // 1KB test file
+	testFile := "/tmp/http_test_download.bin"
+
+	// Download with progress tracking
+	err := progress.DownloadFileWithProgress(testURL, testFile, &progress.ProgressBarConfig{
+		Width:          40,
+		ShowPercent:    true,
+		ShowSpeed:      true,
+		ShowETA:        true,
+		CustomLabel:    "HTTP Download",
+		RefreshRate:    50 * time.Millisecond,
+		Theme:          &progress.RainbowTheme,
+		EnableChannels: true,
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("HTTP download failed: %v", err)
+	}
+
+	// Clean up
+	os.Remove(testFile)
+
+	return "Real HTTP download demo completed! ✨", nil
 }
 
 // HandleFileDeletion handles file deletion with safety checks
