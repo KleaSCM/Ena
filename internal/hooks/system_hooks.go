@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"ena/internal/browser"
+	"ena/internal/progress"
 	"ena/pkg/system"
 )
 
@@ -254,6 +255,125 @@ func (sh *SystemHooks) HandleFileBrowser(args []string) (string, error) {
 	}
 
 	return fmt.Sprintf("Selected file: \"%s\" ✨", selectedPath), nil
+}
+
+// HandleDownload handles file downloads with progress bar
+func (sh *SystemHooks) HandleDownload(args []string) (string, error) {
+	if err := requireArgs(args, 2, "Download"); err != nil {
+		return "", err
+	}
+
+	url := args[0]
+	filename := args[1]
+
+	// Download with progress bar
+	err := progress.DownloadWithProgress(url, filename)
+	if err != nil {
+		return "", fmt.Errorf("Failed to download file: %v", err)
+	}
+
+	return fmt.Sprintf("Downloaded \"%s\" to \"%s\"! ✨", url, filename), nil
+}
+
+// HandleMultiProgress handles multiple file operations with multiple progress bars
+func (sh *SystemHooks) HandleMultiProgress(args []string) (string, error) {
+	if err := requireArgs(args, 1, "Multi-progress"); err != nil {
+		return "", err
+	}
+
+	operation := args[0]
+	var files []string
+
+	// Get files from current directory for demo
+	if len(args) > 1 {
+		files = args[1:]
+	} else {
+		// Use some test files
+		files = []string{"/tmp/test_source.txt", "/tmp/test_dest.txt"}
+	}
+
+	// Process multiple files with progress bars
+	err := progress.ProcessMultipleFilesWithProgress(files, operation)
+	if err != nil {
+		return "", fmt.Errorf("Failed to process files: %v", err)
+	}
+
+	return fmt.Sprintf("Processed %d files with %s operation! ✨", len(files), operation), nil
+}
+
+// HandlePauseResume handles pause/resume operations for progress bars
+func (sh *SystemHooks) HandlePauseResume(args []string) (string, error) {
+	if err := requireArgs(args, 1, "Pause/Resume"); err != nil {
+		return "", err
+	}
+
+	operation := args[0]
+
+	switch operation {
+	case "demo":
+		// Demonstrate pause/resume functionality
+		return sh.demonstratePauseResume()
+	case "test":
+		// Test terminal compatibility
+		return sh.testTerminalCompatibility()
+	default:
+		return "", fmt.Errorf("Unknown pause/resume operation: %s", operation)
+	}
+}
+
+// demonstratePauseResume demonstrates pause/resume functionality
+func (sh *SystemHooks) demonstratePauseResume() (string, error) {
+	// Create a progress bar with persistent state
+	pb := progress.NewProgressBar(1000, &progress.ProgressBarConfig{
+		Width:        40,
+		ShowPercent:  true,
+		ShowSpeed:    true,
+		ShowETA:      true,
+		CustomLabel:  "Pause/Resume Demo",
+		RefreshRate:  50 * time.Millisecond,
+		ColorEnabled: true,
+		StateFile:    "/tmp/progress_demo.state",
+		Persistent:   true,
+	})
+
+	fmt.Println("🎯 Pause/Resume Demo - Progress bar will pause at 50%")
+
+	// Simulate progress with pause
+	for i := int64(0); i <= 1000; i += 10 {
+		pb.Update(i)
+		pb.Display()
+
+		// Pause at 50%
+		if i == 500 {
+			fmt.Println("\n⏸️ Pausing at 50%...")
+			pb.Pause()
+			time.Sleep(2 * time.Second)
+			fmt.Println("▶️ Resuming...")
+			pb.Resume()
+		}
+
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	pb.Finish()
+	pb.Display()
+	fmt.Println()
+
+	return "Pause/Resume demo completed! ✨", nil
+}
+
+// testTerminalCompatibility tests terminal capabilities
+func (sh *SystemHooks) testTerminalCompatibility() (string, error) {
+	caps := progress.DetectTerminalCapabilities()
+
+	result := fmt.Sprintf("Terminal Compatibility Test:\n")
+	result += fmt.Sprintf("  Colors: %t\n", caps.SupportsColor)
+	result += fmt.Sprintf("  Cursor Control: %t\n", caps.SupportsCursor)
+	result += fmt.Sprintf("  Screen Clear: %t\n", caps.SupportsClear)
+	result += fmt.Sprintf("  Terminal Size: %dx%d\n", caps.Width, caps.Height)
+	result += fmt.Sprintf("  Is Dumb Terminal: %t\n", caps.IsDumb)
+
+	return result, nil
 }
 
 // HandleFileDeletion handles file deletion with safety checks

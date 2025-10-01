@@ -15,10 +15,11 @@ package system
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"ena/internal/progress"
 )
 
 // FileManager handles all file and directory operations
@@ -81,25 +82,8 @@ func (fm *FileManager) WriteFile(path string, content string) (string, error) {
 
 // CopyFile copies a file from source to destination
 func (fm *FileManager) CopyFile(src, dest string) (string, error) {
-	// Copy file gently - duplicating important content
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return "", fmt.Errorf("ソースFailed to read file: %v", err)
-	}
-	defer sourceFile.Close()
-
-	destDir := filepath.Dir(dest)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return "", fmt.Errorf("コピー先Failed to create directory: %v", err)
-	}
-
-	destFile, err := os.Create(dest)
-	if err != nil {
-		return "", fmt.Errorf("コピー先Failed to create file: %v", err)
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, sourceFile)
+	// Copy file gently with progress bar
+	err := progress.CopyFileWithProgress(src, dest)
 	if err != nil {
 		return "", fmt.Errorf("Failed to copy file: %v", err)
 	}

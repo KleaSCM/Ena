@@ -91,6 +91,12 @@ func (a *Assistant) ProcessCommand(command string, args []string) (string, error
 		return a.SystemHooks.HandleFileDeletion(args)
 	case "browse":
 		return a.SystemHooks.HandleFileBrowser(args)
+	case "download":
+		return a.SystemHooks.HandleDownload(args)
+	case "multi":
+		return a.SystemHooks.HandleMultiProgress(args)
+	case "pause":
+		return a.SystemHooks.HandlePauseResume(args)
 	default:
 		return "", fmt.Errorf("Unknown command: \"%s\" - I don't understand that! 😅", command)
 	}

@@ -62,6 +62,10 @@ func GetHelpEntries() []HelpEntry {
 		{"🔍 Search & Delete", "search <pattern> <directory>", "Search for files"},
 		{"🔍 Search & Delete", "delete <path> [--force]", "Delete a file"},
 		{"🗂️ File Browser", "browse [path]", "Interactive file browser"},
+		{"📥 Download", "download <url> <filename>", "Download file with progress bar"},
+		{"📊 Multi-Progress", "multi <operation> [files...]", "Process multiple files with multiple progress bars"},
+		{"⏸️ Pause/Resume", "pause demo", "Demonstrate pause/resume functionality"},
+		{"⏸️ Pause/Resume", "pause test", "Test terminal compatibility"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -99,6 +103,9 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupSystemCommands(rootCmd, assistant)
 	setupHealthCommands(rootCmd, assistant)
 	setupSearchCommands(rootCmd, assistant)
+	setupDownloadCommands(rootCmd, assistant)
+	setupMultiCommands(rootCmd, assistant)
+	setupPauseCommands(rootCmd, assistant)
 
 	return rootCmd
 }
