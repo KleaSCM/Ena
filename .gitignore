@@ -49,3 +49,10 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Ena-specific files that shouldn't be committed
+ena
+notifications_history.json
+themes/
+*.state
+progress_*.state
