@@ -15,7 +15,7 @@
 - [ ] **Command aliases** (e.g., "ls" → "terminal execute ls -la")
 - [x] **Batch operations** (delete multiple files, copy folders recursively) ✅
 - [x] **Undo functionality** for file operations ✅
-- [ ] **Smart file organization** (auto-sort downloads, organize by type)
+- [x] **Smart file organization** (auto-sort downloads, organize by type) ✅
 - [ ] **Pattern-based operations** (find all .txt files older than 30 days)
 - [ ] **Automated backups** before destructive operations
 - [ ] **Smart app detection** (auto-detect installed applications)

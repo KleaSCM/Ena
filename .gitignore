@@ -56,3 +56,10 @@ notifications_history.json
 themes/
 *.state
 progress_*.state
+go.mod
+.gitignore
+go.sum
+test_organizer_types
+test_commands
+go.mod
+go.sum

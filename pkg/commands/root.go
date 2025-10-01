@@ -115,6 +115,13 @@ func GetHelpEntries() []HelpEntry {
 		{"↩️ Undo Operations", "restore-file <path>", "Restore a file from undo history"},
 		{"↩️ Undo Operations", "start-session <name>", "Start a new undo session"},
 		{"↩️ Undo Operations", "end-session", "End the current undo session"},
+		{"🗂️ Smart Organization", "organize <paths...>", "Organize files using smart rules"},
+		{"🗂️ Smart Organization", "organize-file <path>", "Organize a single file"},
+		{"🗂️ Smart Organization", "add-rule <name>", "Add new organization rule"},
+		{"🗂️ Smart Organization", "list-rules", "List all organization rules"},
+		{"🗂️ Smart Organization", "file-type <path>", "Get file type information"},
+		{"🗂️ Smart Organization", "start-watching", "Start real-time file organization"},
+		{"🗂️ Smart Organization", "stop-watching", "Stop real-time file organization"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -161,6 +168,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupSuggestionsCommands(rootCmd)
 	setupBatchCommands(rootCmd)
 	setupUndoCommands(rootCmd)
+	setupOrganizerCommands(rootCmd)
 
 	return rootCmd
 }

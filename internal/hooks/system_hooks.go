@@ -24,6 +24,7 @@ import (
 	"ena/internal/batch"
 	"ena/internal/browser"
 	"ena/internal/notifications"
+	"ena/internal/organizer"
 	"ena/internal/progress"
 	"ena/internal/suggestions"
 	"ena/internal/theme"
@@ -72,6 +73,7 @@ type SystemHooks struct {
 	UsageAnalytics      *suggestions.UsageAnalytics
 	BatchManager        *batch.BatchManager
 	UndoManager         *undo.UndoManager
+	FileOrganizer       *organizer.FileOrganizer
 }
 
 // Global theme manager instance for persistence
@@ -89,6 +91,9 @@ var globalBatchManager *batch.BatchManager
 // Global undo manager instance for persistence
 var globalUndoManager *undo.UndoManager
 
+// Global file organizer instance for persistence
+var globalFileOrganizer *organizer.FileOrganizer
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
@@ -101,6 +106,7 @@ func NewSystemHooks() *SystemHooks {
 		UsageAnalytics:      getGlobalAnalytics(),
 		BatchManager:        getGlobalBatchManager(),
 		UndoManager:         getGlobalUndoManager(),
+		FileOrganizer:       getGlobalFileOrganizer(),
 	}
 }
 
@@ -143,6 +149,14 @@ func getGlobalUndoManager() *undo.UndoManager {
 		globalUndoManager = undo.NewUndoManager(getGlobalAnalytics())
 	}
 	return globalUndoManager
+}
+
+// getGlobalFileOrganizer returns the global file organizer instance
+func getGlobalFileOrganizer() *organizer.FileOrganizer {
+	if globalFileOrganizer == nil {
+		globalFileOrganizer = organizer.NewFileOrganizer(getGlobalAnalytics())
+	}
+	return globalFileOrganizer
 }
 
 // HandleFileOperation processes file-related commands
