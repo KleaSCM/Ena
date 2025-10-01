@@ -27,6 +27,7 @@ import (
 	"ena/internal/progress"
 	"ena/internal/suggestions"
 	"ena/internal/theme"
+	"ena/internal/undo"
 	"ena/internal/watcher"
 	"ena/pkg/system"
 )
@@ -70,6 +71,7 @@ type SystemHooks struct {
 	NotificationManager *notifications.NotificationManager
 	UsageAnalytics      *suggestions.UsageAnalytics
 	BatchManager        *batch.BatchManager
+	UndoManager         *undo.UndoManager
 }
 
 // Global theme manager instance for persistence
@@ -84,6 +86,9 @@ var globalAnalytics *suggestions.UsageAnalytics
 // Global batch manager instance for persistence
 var globalBatchManager *batch.BatchManager
 
+// Global undo manager instance for persistence
+var globalUndoManager *undo.UndoManager
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
@@ -95,6 +100,7 @@ func NewSystemHooks() *SystemHooks {
 		NotificationManager: getGlobalNotificationManager(),
 		UsageAnalytics:      getGlobalAnalytics(),
 		BatchManager:        getGlobalBatchManager(),
+		UndoManager:         getGlobalUndoManager(),
 	}
 }
 
@@ -131,6 +137,14 @@ func getGlobalBatchManager() *batch.BatchManager {
 	return globalBatchManager
 }
 
+// getGlobalUndoManager returns the global undo manager instance
+func getGlobalUndoManager() *undo.UndoManager {
+	if globalUndoManager == nil {
+		globalUndoManager = undo.NewUndoManager(getGlobalAnalytics())
+	}
+	return globalUndoManager
+}
+
 // HandleFileOperation processes file-related commands
 func (sh *SystemHooks) HandleFileOperation(args []string) (string, error) {
 	if err := requireArgs(args, 2, "File operation"); err != nil {
@@ -140,32 +154,64 @@ func (sh *SystemHooks) HandleFileOperation(args []string) (string, error) {
 	operation := args[0]
 	path := args[1]
 
+	var result string
+	var err error
+
 	switch operation {
 	case OpCreate:
-		return sh.FileManager.CreateFile(path)
+		result, err = sh.FileManager.CreateFile(path)
+		if err == nil {
+			// Track create operation
+			if trackErr := sh.UndoManager.TrackOperation(undo.OpCreate, path, ""); trackErr != nil {
+				// Log error but don't fail the operation
+				fmt.Printf("⚠️ Warning: Failed to track undo operation: %v\n", trackErr)
+			}
+		}
 	case OpRead:
-		return sh.FileManager.ReadFile(path)
+		result, err = sh.FileManager.ReadFile(path)
 	case OpWrite:
 		if err := requireArgs(args, 3, "File write"); err != nil {
 			return "", err
 		}
 		content := strings.Join(args[2:], " ")
-		return sh.FileManager.WriteFile(path, content)
+		result, err = sh.FileManager.WriteFile(path, content)
+		if err == nil {
+			// Track update operation
+			if trackErr := sh.UndoManager.TrackOperation(undo.OpUpdate, path, ""); trackErr != nil {
+				fmt.Printf("⚠️ Warning: Failed to track undo operation: %v\n", trackErr)
+			}
+		}
 	case OpCopy:
 		if err := requireArgs(args, 3, "File copy"); err != nil {
 			return "", err
 		}
-		return sh.FileManager.CopyFile(path, args[2])
+		dest := args[2]
+		result, err = sh.FileManager.CopyFile(path, dest)
+		if err == nil {
+			// Track copy operation
+			if trackErr := sh.UndoManager.TrackOperation(undo.OpCopy, path, dest); trackErr != nil {
+				fmt.Printf("⚠️ Warning: Failed to track undo operation: %v\n", trackErr)
+			}
+		}
 	case OpMove:
 		if err := requireArgs(args, 3, "File move"); err != nil {
 			return "", err
 		}
-		return sh.FileManager.MoveFile(path, args[2])
+		dest := args[2]
+		result, err = sh.FileManager.MoveFile(path, dest)
+		if err == nil {
+			// Track move operation
+			if trackErr := sh.UndoManager.TrackOperation(undo.OpMove, path, dest); trackErr != nil {
+				fmt.Printf("⚠️ Warning: Failed to track undo operation: %v\n", trackErr)
+			}
+		}
 	case OpInfo:
-		return sh.FileManager.GetFileInfo(path)
+		result, err = sh.FileManager.GetFileInfo(path)
 	default:
 		return "", fmt.Errorf("Unknown file operation: \"%s\" - I don't understand that! 😅", operation)
 	}
+
+	return result, err
 }
 
 // HandleFolderOperation processes folder-related commands

@@ -109,6 +109,12 @@ func GetHelpEntries() []HelpEntry {
 		{"📦 Batch Operations", "batch-move <sources...> <dest>", "Move multiple files/folders efficiently"},
 		{"📦 Batch Operations", "batch-status [job-id]", "Show status of batch operations"},
 		{"📦 Batch Operations", "batch-cancel <job-id>", "Cancel a running batch operation"},
+		{"↩️ Undo Operations", "undo-history", "Show undo history and available operations"},
+		{"↩️ Undo Operations", "undo-operation <id>", "Undo a specific operation"},
+		{"↩️ Undo Operations", "undo-session <id>", "Undo all operations in a session"},
+		{"↩️ Undo Operations", "restore-file <path>", "Restore a file from undo history"},
+		{"↩️ Undo Operations", "start-session <name>", "Start a new undo session"},
+		{"↩️ Undo Operations", "end-session", "End the current undo session"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -154,6 +160,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupNotificationCommands(rootCmd, assistant)
 	setupSuggestionsCommands(rootCmd)
 	setupBatchCommands(rootCmd)
+	setupUndoCommands(rootCmd)
 
 	return rootCmd
 }
