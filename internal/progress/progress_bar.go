@@ -13,6 +13,7 @@
 package progress
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -23,7 +24,34 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"golang.org/x/term"
 )
+
+// ProgressBarInterface defines the interface for progress bars (for testing)
+type ProgressBarInterface interface {
+	Update(current int64)
+	Add(increment int64)
+	SetTotal(total int64)
+	Finish()
+	Pause()
+	Resume()
+	IsPaused() bool
+	SetError(message string)
+	ClearError()
+	IsError() bool
+	Display()
+	SaveState() error
+	loadState() error
+}
+
+// MultiProgressManagerInterface defines the interface for multi-progress managers (for testing)
+type MultiProgressManagerInterface interface {
+	AddBar(total int64, config *ProgressBarConfig) *ProgressBar
+	DisplayAll()
+	Start()
+	Stop()
+	SaveAllStates() error
+}
 
 // ProgressBar represents an animated progress bar with enhanced features
 type ProgressBar struct {
@@ -57,6 +85,11 @@ type ProgressBar struct {
 	// Persistent state
 	stateFile  string
 	persistent bool
+
+	// Adaptive refresh
+	adaptiveRefresh bool
+	lastSpeed       int64
+	refreshHistory  []time.Duration
 }
 
 // TerminalCapabilities represents terminal capabilities
@@ -71,16 +104,17 @@ type TerminalCapabilities struct {
 
 // ProgressBarConfig holds configuration for progress bars
 type ProgressBarConfig struct {
-	Width         int
-	ShowPercent   bool
-	ShowSpeed     bool
-	ShowETA       bool
-	CustomLabel   string
-	RefreshRate   time.Duration
-	ColorEnabled  bool
-	MultiBarIndex int
-	StateFile     string
-	Persistent    bool
+	Width           int
+	ShowPercent     bool
+	ShowSpeed       bool
+	ShowETA         bool
+	CustomLabel     string
+	RefreshRate     time.Duration
+	ColorEnabled    bool
+	MultiBarIndex   int
+	StateFile       string
+	Persistent      bool
+	AdaptiveRefresh bool
 }
 
 // MultiProgressManager manages multiple progress bars with persistent state
@@ -141,25 +175,48 @@ func isTerminal(file *os.File) bool {
 	return file == os.Stdout || file == os.Stderr
 }
 
-// getTerminalSize gets terminal dimensions
+// getTerminalSize gets terminal dimensions using golang.org/x/term
 func getTerminalSize() (width, height int, err error) {
-	// This is a simplified implementation
-	// In a real implementation, you'd use syscalls or a library
-	return 80, 24, nil
+	// Try to get terminal size from stdout
+	if width, height, err = term.GetSize(int(os.Stdout.Fd())); err == nil {
+		return width, height, nil
+	}
+
+	// Fallback: try stderr
+	if width, height, err = term.GetSize(int(os.Stderr.Fd())); err == nil {
+		return width, height, nil
+	}
+
+	// Final fallback: environment variables
+	if term := os.Getenv("COLUMNS"); term != "" {
+		if w, err := fmt.Sscanf(term, "%d", &width); err == nil && w == 1 {
+			// Width found, try to get height
+			if term := os.Getenv("LINES"); term != "" {
+				if h, err := fmt.Sscanf(term, "%d", &height); err == nil && h == 1 {
+					return width, height, nil
+				}
+			}
+			return width, 24, nil // Default height
+		}
+	}
+
+	// Ultimate fallback
+	return 80, 24, fmt.Errorf("unable to determine terminal size")
 }
 
 // NewProgressBar creates a new progress bar with enhanced features
 func NewProgressBar(total int64, config *ProgressBarConfig) *ProgressBar {
 	if config == nil {
 		config = &ProgressBarConfig{
-			Width:         50,
-			ShowPercent:   true,
-			ShowSpeed:     true,
-			ShowETA:       true,
-			RefreshRate:   100 * time.Millisecond,
-			ColorEnabled:  true,
-			MultiBarIndex: 0,
-			Persistent:    false,
+			Width:           50,
+			ShowPercent:     true,
+			ShowSpeed:       true,
+			ShowETA:         true,
+			RefreshRate:     100 * time.Millisecond,
+			ColorEnabled:    true,
+			MultiBarIndex:   0,
+			Persistent:      false,
+			AdaptiveRefresh: true,
 		}
 	}
 
@@ -182,26 +239,29 @@ func NewProgressBar(total int64, config *ProgressBarConfig) *ProgressBar {
 	}
 
 	pb := &ProgressBar{
-		total:          total,
-		current:        0,
-		width:          config.Width,
-		showPercent:    config.ShowPercent,
-		showSpeed:      config.ShowSpeed,
-		showETA:        config.ShowETA,
-		startTime:      time.Now(),
-		lastUpdate:     time.Now(),
-		lastCurrent:    0,
-		customLabel:    config.CustomLabel,
-		refreshRate:    config.RefreshRate,
-		lastDisplay:    time.Now(),
-		colorEnabled:   config.ColorEnabled,
-		multiBarIndex:  config.MultiBarIndex,
-		errorOccurred:  false,
-		paused:         0,
-		totalPauseTime: 0,
-		terminalCaps:   terminalCaps,
-		stateFile:      config.StateFile,
-		persistent:     config.Persistent,
+		total:           total,
+		current:         0,
+		width:           config.Width,
+		showPercent:     config.ShowPercent,
+		showSpeed:       config.ShowSpeed,
+		showETA:         config.ShowETA,
+		startTime:       time.Now(),
+		lastUpdate:      time.Now(),
+		lastCurrent:     0,
+		customLabel:     config.CustomLabel,
+		refreshRate:     config.RefreshRate,
+		lastDisplay:     time.Now(),
+		colorEnabled:    config.ColorEnabled,
+		multiBarIndex:   config.MultiBarIndex,
+		errorOccurred:   false,
+		paused:          0,
+		totalPauseTime:  0,
+		terminalCaps:    terminalCaps,
+		stateFile:       config.StateFile,
+		persistent:      config.Persistent,
+		adaptiveRefresh: config.AdaptiveRefresh,
+		lastSpeed:       0,
+		refreshHistory:  make([]time.Duration, 0, 10),
 	}
 
 	// Load persistent state if enabled
@@ -300,34 +360,56 @@ func (pb *ProgressBar) IsPaused() bool {
 	return atomic.LoadInt32(&pb.paused) == 1
 }
 
-// SaveState saves the current state to file
+// ProgressBarState represents the serializable state of a progress bar
+type ProgressBarState struct {
+	Current        int64           `json:"current"`
+	Total          int64           `json:"total"`
+	StartTime      time.Time       `json:"startTime"`
+	TotalPauseTime time.Duration   `json:"totalPauseTime"`
+	Done           bool            `json:"done"`
+	ErrorOccurred  bool            `json:"errorOccurred"`
+	ErrorMessage   string          `json:"errorMessage"`
+	Paused         bool            `json:"paused"`
+	CustomLabel    string          `json:"customLabel"`
+	LastSpeed      int64           `json:"lastSpeed"`
+	RefreshHistory []time.Duration `json:"refreshHistory"`
+	Version        string          `json:"version"`
+}
+
+// SaveState saves the current state to file in JSON format
 func (pb *ProgressBar) SaveState() error {
 	if !pb.persistent || pb.stateFile == "" {
 		return nil
 	}
 
 	pb.mutex.RLock()
-	state := map[string]interface{}{
-		"current":        pb.current,
-		"total":          pb.total,
-		"startTime":      pb.startTime,
-		"totalPauseTime": pb.totalPauseTime,
-		"done":           pb.done,
-		"errorOccurred":  pb.errorOccurred,
-		"errorMessage":   pb.errorMessage,
-		"paused":         pb.IsPaused(),
+	state := ProgressBarState{
+		Current:        pb.current,
+		Total:          pb.total,
+		StartTime:      pb.startTime,
+		TotalPauseTime: pb.totalPauseTime,
+		Done:           pb.done,
+		ErrorOccurred:  pb.errorOccurred,
+		ErrorMessage:   pb.errorMessage,
+		Paused:         pb.IsPaused(),
+		CustomLabel:    pb.customLabel,
+		LastSpeed:      pb.lastSpeed,
+		RefreshHistory: make([]time.Duration, len(pb.refreshHistory)),
+		Version:        "1.0",
 	}
+	copy(state.RefreshHistory, pb.refreshHistory)
 	pb.mutex.RUnlock()
 
-	// In a real implementation, you'd serialize this to JSON/YAML
-	// For now, we'll just create a simple text file
-	content := fmt.Sprintf("current=%d\ntotal=%d\ndone=%t\nerror=%t\npaused=%t\n",
-		state["current"], state["total"], state["done"], state["errorOccurred"], state["paused"])
+	// Serialize to JSON with proper indentation
+	jsonData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal state to JSON: %v", err)
+	}
 
-	return os.WriteFile(pb.stateFile, []byte(content), 0644)
+	return os.WriteFile(pb.stateFile, jsonData, 0644)
 }
 
-// loadState loads state from file
+// loadState loads state from file with robust JSON parsing and error handling
 func (pb *ProgressBar) loadState() error {
 	if !pb.persistent || pb.stateFile == "" {
 		return nil
@@ -338,31 +420,111 @@ func (pb *ProgressBar) loadState() error {
 		return err // File doesn't exist or can't be read
 	}
 
-	// Simple parsing - in a real implementation, you'd use JSON/YAML
+	// Try JSON parsing first
+	var state ProgressBarState
+	if err := json.Unmarshal(data, &state); err == nil {
+		// Successfully parsed JSON
+		pb.mutex.Lock()
+		pb.current = state.Current
+		pb.total = state.Total
+		pb.startTime = state.StartTime
+		pb.totalPauseTime = state.TotalPauseTime
+		pb.done = state.Done
+		pb.errorOccurred = state.ErrorOccurred
+		pb.errorMessage = state.ErrorMessage
+		pb.customLabel = state.CustomLabel
+		pb.lastSpeed = state.LastSpeed
+		pb.refreshHistory = make([]time.Duration, len(state.RefreshHistory))
+		copy(pb.refreshHistory, state.RefreshHistory)
+
+		// Set pause state if needed
+		if state.Paused {
+			atomic.StoreInt32(&pb.paused, 1)
+		}
+		pb.mutex.Unlock()
+		return nil
+	}
+
+	// Fallback: try legacy key=value format
 	lines := strings.Split(string(data), "\n")
 	for _, line := range lines {
-		parts := strings.Split(line, "=")
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
 
-		switch parts[0] {
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
 		case "current":
-			if val, err := fmt.Sscanf(parts[1], "%d", &pb.current); err == nil && val == 1 {
-				// Successfully loaded current value
+			if val, err := fmt.Sscanf(value, "%d", &pb.current); err != nil || val != 1 {
+				return fmt.Errorf("failed to parse current value: %v", err)
+			}
+		case "total":
+			if val, err := fmt.Sscanf(value, "%d", &pb.total); err != nil || val != 1 {
+				return fmt.Errorf("failed to parse total value: %v", err)
 			}
 		case "done":
-			if parts[1] == "true" {
-				pb.done = true
-			}
+			pb.done = (value == "true")
 		case "error":
-			if parts[1] == "true" {
-				pb.errorOccurred = true
+			pb.errorOccurred = (value == "true")
+		case "paused":
+			if value == "true" {
+				atomic.StoreInt32(&pb.paused, 1)
 			}
 		}
 	}
 
 	return nil
+}
+
+// shouldUpdateAdaptive determines if the progress bar should update based on adaptive refresh logic
+func (pb *ProgressBar) shouldUpdateAdaptive() bool {
+	now := time.Now()
+	timeSinceLastUpdate := now.Sub(pb.lastDisplay)
+
+	// Always update if enough time has passed (minimum refresh rate)
+	if timeSinceLastUpdate >= pb.refreshRate {
+		return true
+	}
+
+	// Calculate current speed
+	currentSpeed := pb.calculateSpeed()
+
+	// If speed has changed significantly, update more frequently
+	if pb.lastSpeed > 0 {
+		speedChange := float64(currentSpeed-pb.lastSpeed) / float64(pb.lastSpeed)
+		if speedChange > 0.1 || speedChange < -0.1 { // 10% change threshold
+			pb.lastSpeed = currentSpeed
+			return true
+		}
+	}
+
+	// Update more frequently for faster progress
+	if currentSpeed > pb.lastSpeed*2 {
+		pb.lastSpeed = currentSpeed
+		return true
+	}
+
+	// Update less frequently for slower progress
+	if currentSpeed < pb.lastSpeed/2 && pb.lastSpeed > 0 {
+		pb.lastSpeed = currentSpeed
+		return timeSinceLastUpdate >= pb.refreshRate*2
+	}
+
+	// Record refresh timing for analysis
+	pb.refreshHistory = append(pb.refreshHistory, timeSinceLastUpdate)
+	if len(pb.refreshHistory) > 10 {
+		pb.refreshHistory = pb.refreshHistory[1:] // Keep only last 10
+	}
+
+	return false
 }
 
 // NewMultiProgressManager creates a new multi-progress manager with enhanced features
@@ -468,8 +630,15 @@ func (pb *ProgressBar) Display() {
 	paused := pb.IsPaused()
 	pb.mutex.RUnlock()
 
-	// Check if we should update based on refresh rate
-	if time.Since(pb.lastDisplay) < pb.refreshRate && !done && !errorOccurred && !paused {
+	// Check if we should update based on refresh rate (adaptive or fixed)
+	shouldUpdate := false
+	if pb.adaptiveRefresh {
+		shouldUpdate = pb.shouldUpdateAdaptive()
+	} else {
+		shouldUpdate = time.Since(pb.lastDisplay) >= pb.refreshRate
+	}
+
+	if !shouldUpdate && !done && !errorOccurred && !paused {
 		return
 	}
 	pb.lastDisplay = time.Now()
