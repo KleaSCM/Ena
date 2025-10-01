@@ -20,11 +20,57 @@ import (
 	"github.com/spf13/cobra"
 
 	"ena/internal/core"
+	"ena/internal/input"
 )
+
+// HelpEntry represents a single help entry
+type HelpEntry struct {
+	Category string
+	Command  string
+	Desc     string
+}
+
+// GetHelpEntries returns all available help entries
+func GetHelpEntries() []HelpEntry {
+	// Centralized help entries - easy to maintain
+	return []HelpEntry{
+		{"📁 File Operations", "file create <path>", "Create a file"},
+		{"📁 File Operations", "file read <path>", "Read a file"},
+		{"📁 File Operations", "file write <path> <content>", "Write to a file"},
+		{"📁 File Operations", "file copy <src> <dest>", "Copy a file"},
+		{"📁 File Operations", "file move <src> <dest>", "Move a file"},
+		{"📁 File Operations", "file delete <path> [--force]", "Delete a file"},
+		{"📁 File Operations", "file info <path>", "Show file information"},
+		{"📂 Folder Operations", "folder create <path>", "Create a folder"},
+		{"📂 Folder Operations", "folder list <path>", "List folder contents"},
+		{"📂 Folder Operations", "folder delete <path>", "Delete a folder"},
+		{"📂 Folder Operations", "folder info <path>", "Show folder information"},
+		{"🖥️  Terminal Operations", "terminal open", "Open a new terminal"},
+		{"🖥️  Terminal Operations", "terminal close", "Close terminal"},
+		{"🖥️  Terminal Operations", "terminal execute <command>", "Execute a command"},
+		{"🖥️  Terminal Operations", "terminal cd <directory>", "Change directory"},
+		{"📱 Application Operations", "app start <app_name>", "Start an application"},
+		{"📱 Application Operations", "app stop <app_name>", "Stop an application"},
+		{"📱 Application Operations", "app restart <app_name>", "Restart an application"},
+		{"📱 Application Operations", "app list", "List running applications"},
+		{"📱 Application Operations", "app info <app_name>", "Show application information"},
+		{"⚡ System Operations", "system restart", "Restart system"},
+		{"⚡ System Operations", "system shutdown", "Shutdown system"},
+		{"⚡ System Operations", "system sleep", "Put system to sleep"},
+		{"⚡ System Operations", "system info", "Show system information"},
+		{"🏥 System Health Check", "health", "Check system health"},
+		{"🔍 Search & Delete", "search <pattern> <directory>", "Search for files"},
+		{"🔍 Search & Delete", "delete <path> [--force]", "Delete a file"},
+		{"🗂️ File Browser", "browse [path]", "Interactive file browser"},
+		{"💡 Other", "help", "Show this help"},
+		{"💡 Other", "status", "Show Ena's status"},
+		{"💡 Other", "exit", "Say goodbye to Ena"},
+	}
+}
 
 // SetupRootCommand creates and configures the root command
 func SetupRootCommand(assistant *core.Assistant) *cobra.Command {
-	// あたしのコマンドラインインターフェース...美しく使いやすくするのよ〜 (๑˃̵ᴗ˂̵)
+	// Command line interface configuration
 	var rootCmd = &cobra.Command{
 		Use:   "ena",
 		Short: "Ena - Your gentle virtual assistant ✨",
@@ -69,32 +115,104 @@ func startInteractiveMode(assistant *core.Assistant) {
 
 	color.New(color.FgCyan).Println("💡 Tip: Type 'help' to see what I can do!")
 	color.New(color.FgCyan).Println("💡 Tip: Type 'exit' to say goodbye...")
+	color.New(color.FgCyan).Println("💡 Tip: Press TAB for command completion!")
+	color.New(color.FgCyan).Println("💡 Tip: Try typing 'fil' and press TAB for fuzzy search!")
 	fmt.Println()
 
+	// Initialize terminal input with completion support
+	terminalInput, err := input.NewTerminalInput()
+	if err != nil {
+		color.New(color.FgRed).Printf("❌ Failed to initialize terminal input: %v\n", err)
+		color.New(color.FgYellow).Println("Falling back to basic input mode...")
+		startBasicInteractiveMode(assistant)
+		return
+	}
+	defer terminalInput.Close()
+
 	for {
-		// Display prompt
-		color.New(color.FgYellow, color.Bold).Print("Ena> ")
+		// Read line with completion support
+		inputStr, err := terminalInput.ReadLine()
+		if err != nil {
+			if err.Error() == "EOF" || err.Error() == "interrupt" {
+				break
+			}
+			color.New(color.FgRed).Printf("❌ Error reading input: %v\n", err)
+			continue
+		}
 
-		var input string
-		fmt.Scanln(&input)
+		if inputStr == "" {
+			continue
+		}
 
-		if strings.ToLower(input) == "exit" {
+		// Add to history
+		terminalInput.AddToHistory(inputStr)
+
+		if strings.ToLower(inputStr) == "exit" {
 			assistant.Shutdown()
 			break
 		}
 
-		if strings.ToLower(input) == "help" {
+		if strings.ToLower(inputStr) == "help" {
 			showHelp()
 			continue
 		}
 
-		if strings.ToLower(input) == "status" {
+		if strings.ToLower(inputStr) == "status" {
 			showStatus(assistant)
 			continue
 		}
 
 		// Parse and execute command
-		parts := strings.Fields(input)
+		parts := strings.Fields(inputStr)
+		if len(parts) == 0 {
+			continue
+		}
+
+		command := parts[0]
+		args := parts[1:]
+
+		result, err := assistant.ProcessCommand(command, args)
+		if err != nil {
+			color.New(color.FgRed).Printf("❌ Error: %v\n", err)
+		} else {
+			color.New(color.FgGreen).Println(result)
+		}
+
+		fmt.Println()
+	}
+}
+
+// startBasicInteractiveMode starts basic interactive mode without completion
+func startBasicInteractiveMode(assistant *core.Assistant) {
+	// Basic interactive mode fallback
+	for {
+		fmt.Print("Ena> ")
+
+		var inputStr string
+		fmt.Scanln(&inputStr)
+		inputStr = strings.TrimSpace(inputStr)
+
+		if inputStr == "" {
+			continue
+		}
+
+		if strings.ToLower(inputStr) == "exit" {
+			assistant.Shutdown()
+			break
+		}
+
+		if strings.ToLower(inputStr) == "help" {
+			showHelp()
+			continue
+		}
+
+		if strings.ToLower(inputStr) == "status" {
+			showStatus(assistant)
+			continue
+		}
+
+		// Parse and execute command
+		parts := strings.Fields(inputStr)
 		if len(parts) == 0 {
 			continue
 		}
@@ -116,61 +234,31 @@ func startInteractiveMode(assistant *core.Assistant) {
 // showHelp displays the help information
 func showHelp() {
 	// Display comprehensive help information
-	helpText := []string{
-		"🌸 Ena's Command List 🌸",
-		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-		"",
-		"📁 File Operations:",
-		"  file create <path>              - Create a file",
-		"  file read <path>                - Read a file",
-		"  file write <path> <content>     - Write to a file",
-		"  file copy <src> <dest>          - Copy a file",
-		"  file move <src> <dest>          - Move a file",
-		"  file delete <path> [--force]    - Delete a file",
-		"  file info <path>                - Show file information",
-		"",
-		"📂 Folder Operations:",
-		"  folder create <path>            - Create a folder",
-		"  folder list <path>              - List folder contents",
-		"  folder delete <path>            - Delete a folder",
-		"  folder info <path>              - Show folder information",
-		"",
-		"🖥️  Terminal Operations:",
-		"  terminal open                  - Open a new terminal",
-		"  terminal close                 - Close terminal",
-		"  terminal execute <command>     - Execute a command",
-		"  terminal cd <directory>        - Change directory",
-		"",
-		"📱 Application Operations:",
-		"  app start <app_name>           - Start an application",
-		"  app stop <app_name>            - Stop an application",
-		"  app restart <app_name>         - Restart an application",
-		"  app list                       - List running applications",
-		"  app info <app_name>            - Show application information",
-		"",
-		"⚡ System Operations:",
-		"  system restart                 - Restart system",
-		"  system shutdown                - Shutdown system",
-		"  system sleep                   - Put system to sleep",
-		"  system info                    - Show system information",
-		"",
-		"🏥 System Health Check:",
-		"  health                         - Check system health",
-		"",
-		"🔍 Search & Delete:",
-		"  search <pattern> <directory>   - Search for files",
-		"  delete <path> [--force]        - Delete a file",
-		"",
-		"💡 Other:",
-		"  help                          - Show this help",
-		"  status                        - Show Ena's status",
-		"  exit                          - Say goodbye to Ena",
-		"",
-		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-		"Let's have fun managing your system together! (╹◡╹)♡",
+	color.New(color.FgCyan, color.Bold).Println("🌸 Ena's Command List 🌸")
+	color.New(color.FgCyan, color.Bold).Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println()
+
+	entries := GetHelpEntries()
+	currentCategory := ""
+
+	for _, entry := range entries {
+		// Print category header when it changes
+		if entry.Category != currentCategory {
+			if currentCategory != "" {
+				fmt.Println()
+			}
+			color.New(color.FgYellow, color.Bold).Printf("%s:\n", entry.Category)
+			currentCategory = entry.Category
+		}
+
+		// Print command with proper formatting
+		color.New(color.FgWhite).Printf("  %-35s", entry.Command)
+		color.New(color.FgCyan).Printf(" - %s\n", entry.Desc)
 	}
 
-	color.New(color.FgCyan).Println(strings.Join(helpText, "\n"))
+	fmt.Println()
+	color.New(color.FgCyan, color.Bold).Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	color.New(color.FgMagenta).Println("Let's have fun managing your system together! (╹◡╹)♡")
 }
 
 // showStatus displays the assistant status
@@ -178,17 +266,33 @@ func showStatus(assistant *core.Assistant) {
 	// Show Ena's current status
 	status := assistant.GetStatus()
 
-	statusText := []string{
-		"🌸 Ena's Status 🌸",
-		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-		fmt.Sprintf("Name: %s", status["name"]),
-		fmt.Sprintf("Version: %s", status["version"]),
-		fmt.Sprintf("Running: %v", status["running"]),
-		fmt.Sprintf("Uptime: %s", status["uptime"]),
-		fmt.Sprintf("Start Time: %s", status["startTime"]),
-		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-		"I'm doing great! (๑˃̵ᴗ˂̵)",
+	color.New(color.FgMagenta, color.Bold).Println("🌸 Ena's Status 🌸")
+	color.New(color.FgMagenta, color.Bold).Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	// Name
+	color.New(color.FgWhite).Print("Name: ")
+	color.New(color.FgCyan, color.Bold).Println(status["name"])
+
+	// Version
+	color.New(color.FgWhite).Print("Version: ")
+	color.New(color.FgGreen, color.Bold).Println(status["version"])
+
+	// Running status
+	color.New(color.FgWhite).Print("Running: ")
+	if status["running"] == "true" {
+		color.New(color.FgGreen, color.Bold).Println("✓ Yes")
+	} else {
+		color.New(color.FgRed).Println("✗ No")
 	}
 
-	color.New(color.FgGreen).Println(strings.Join(statusText, "\n"))
+	// Uptime
+	color.New(color.FgWhite).Print("Uptime: ")
+	color.New(color.FgYellow).Println(status["uptime"])
+
+	// Start Time
+	color.New(color.FgWhite).Print("Start Time: ")
+	color.New(color.FgCyan).Println(status["startTime"])
+
+	color.New(color.FgMagenta, color.Bold).Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	color.New(color.FgGreen).Println("I'm doing great! (๑˃̵ᴗ˂̵)")
 }

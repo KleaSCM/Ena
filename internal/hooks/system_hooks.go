@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"ena/internal/browser"
 	"ena/pkg/system"
 )
 
@@ -230,6 +231,29 @@ func (sh *SystemHooks) HandleFileSearch(args []string) (string, error) {
 	directory := args[1]
 
 	return sh.FileManager.SearchFiles(pattern, directory)
+}
+
+// HandleFileBrowser handles interactive file browsing
+func (sh *SystemHooks) HandleFileBrowser(args []string) (string, error) {
+	// Interactive file browser - navigate and select files
+	startPath := "."
+	if len(args) > 0 {
+		startPath = args[0]
+	}
+
+	// Create and start file browser
+	browser, err := browser.NewFileBrowser(startPath)
+	if err != nil {
+		return "", fmt.Errorf("Failed to start file browser: %v", err)
+	}
+	defer browser.Close()
+
+	selectedPath, err := browser.Start()
+	if err != nil {
+		return "", fmt.Errorf("File browser error: %v", err)
+	}
+
+	return fmt.Sprintf("Selected file: \"%s\" ✨", selectedPath), nil
 }
 
 // HandleFileDeletion handles file deletion with safety checks
