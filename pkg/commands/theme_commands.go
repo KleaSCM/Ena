@@ -39,6 +39,13 @@ Operations:
   export <theme_name>     - Export theme configuration
   demo                    - Demonstrate all themes
   toggle                  - Toggle between light and dark modes
+  create <name> <desc> <mode> [colors...] - Create custom theme
+  delete <theme_name>     - Delete custom theme
+  save <theme_name>       - Save theme to disk
+  load <file_path>        - Load theme from disk
+  setcolor <theme> <element> <hex> - Set specific color
+  validate <theme_name>   - Validate theme
+  cache <clear|stats>    - Manage color cache
 
 Available Themes:
   default                 - Clean light theme with gentle colors

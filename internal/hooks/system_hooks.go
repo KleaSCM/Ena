@@ -66,6 +66,9 @@ type SystemHooks struct {
 	ThemeManager    *theme.ThemeManager
 }
 
+// Global theme manager instance for persistence
+var globalThemeManager *theme.ThemeManager
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
@@ -73,8 +76,16 @@ func NewSystemHooks() *SystemHooks {
 		FileManager:     system.NewFileManager(),
 		TerminalManager: system.NewTerminalManager(),
 		AppManager:      system.NewAppManager(),
-		ThemeManager:    theme.NewThemeManager(),
+		ThemeManager:    getGlobalThemeManager(),
 	}
+}
+
+// getGlobalThemeManager returns the global theme manager instance
+func getGlobalThemeManager() *theme.ThemeManager {
+	if globalThemeManager == nil {
+		globalThemeManager = theme.NewThemeManager()
+	}
+	return globalThemeManager
 }
 
 // HandleFileOperation processes file-related commands
@@ -1256,6 +1267,27 @@ func (sh *SystemHooks) HandleThemeOperation(args []string) (string, error) {
 	case "toggle":
 		// Toggle between light and dark
 		return sh.toggleTheme()
+	case "create":
+		// Create custom theme
+		return sh.createCustomTheme(args[1:])
+	case "delete":
+		// Delete custom theme
+		return sh.deleteCustomTheme(args[1:])
+	case "save":
+		// Save theme to disk
+		return sh.saveTheme(args[1:])
+	case "load":
+		// Load theme from disk
+		return sh.loadTheme(args[1:])
+	case "setcolor":
+		// Set specific color in theme
+		return sh.setThemeColor(args[1:])
+	case "validate":
+		// Validate theme
+		return sh.validateTheme(args[1:])
+	case "cache":
+		// Manage color cache
+		return sh.manageCache(args[1:])
 	default:
 		return "", fmt.Errorf("Unknown theme operation: %s", operation)
 	}
@@ -1462,6 +1494,198 @@ func (sh *SystemHooks) toggleTheme() (string, error) {
 
 	return fmt.Sprintf("Theme toggled to %s (%s mode) ✨",
 		sh.ThemeManager.Colorize("primary", newTheme), mode), nil
+}
+
+// createCustomTheme creates a new custom theme
+func (sh *SystemHooks) createCustomTheme(args []string) (string, error) {
+	if len(args) < 3 {
+		return "", fmt.Errorf("Usage: theme create <name> <description> <dark|light> [colors...]")
+	}
+
+	name := args[0]
+	description := args[1]
+	mode := args[2]
+
+	isDark := false
+	if mode == "dark" {
+		isDark = true
+	} else if mode != "light" {
+		return "", fmt.Errorf("Mode must be 'dark' or 'light'")
+	}
+
+	// Create default colors based on mode
+	colors := make(map[string]string)
+	if isDark {
+		colors = map[string]string{
+			"primary":    "#3b82f6",
+			"secondary":  "#94a3b8",
+			"success":    "#22c55e",
+			"warning":    "#f59e0b",
+			"error":      "#ef4444",
+			"info":       "#06b6d4",
+			"background": "#0f172a",
+			"foreground": "#f8fafc",
+			"accent":     "#a855f7",
+			"muted":      "#64748b",
+			"border":     "#334155",
+			"highlight":  "#1e293b",
+		}
+	} else {
+		colors = map[string]string{
+			"primary":    "#2563eb",
+			"secondary":  "#64748b",
+			"success":    "#16a34a",
+			"warning":    "#ea580c",
+			"error":      "#dc2626",
+			"info":       "#0891b2",
+			"background": "#ffffff",
+			"foreground": "#1e293b",
+			"accent":     "#7c3aed",
+			"muted":      "#94a3b8",
+			"border":     "#e2e8f0",
+			"highlight":  "#f1f5f9",
+		}
+	}
+
+	// Parse additional color overrides
+	for i := 3; i < len(args); i += 2 {
+		if i+1 < len(args) {
+			colorName := args[i]
+			colorValue := args[i+1]
+			colors[colorName] = colorValue
+		}
+	}
+
+	err := sh.ThemeManager.CreateCustomTheme(name, description, isDark, colors)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create theme: %v", err)
+	}
+
+	return fmt.Sprintf("Custom theme '%s' created successfully! ✨",
+		sh.ThemeManager.Colorize("primary", name)), nil
+}
+
+// deleteCustomTheme deletes a custom theme
+func (sh *SystemHooks) deleteCustomTheme(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme name required")
+	}
+
+	themeName := args[0]
+	err := sh.ThemeManager.DeleteTheme(themeName)
+	if err != nil {
+		return "", fmt.Errorf("Failed to delete theme: %v", err)
+	}
+
+	return fmt.Sprintf("Theme '%s' deleted successfully ✨",
+		sh.ThemeManager.Colorize("primary", themeName)), nil
+}
+
+// saveTheme saves a theme to disk
+func (sh *SystemHooks) saveTheme(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme name required")
+	}
+
+	themeName := args[0]
+	err := sh.ThemeManager.SaveTheme(themeName)
+	if err != nil {
+		return "", fmt.Errorf("Failed to save theme: %v", err)
+	}
+
+	return fmt.Sprintf("Theme '%s' saved to disk successfully ✨",
+		sh.ThemeManager.Colorize("primary", themeName)), nil
+}
+
+// loadTheme loads a theme from disk
+func (sh *SystemHooks) loadTheme(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme file path required")
+	}
+
+	filename := args[0]
+	err := sh.ThemeManager.LoadTheme(filename)
+	if err != nil {
+		return "", fmt.Errorf("Failed to load theme: %v", err)
+	}
+
+	return fmt.Sprintf("Theme loaded from '%s' successfully ✨",
+		sh.ThemeManager.Colorize("primary", filename)), nil
+}
+
+// setThemeColor sets a specific color in a theme
+func (sh *SystemHooks) setThemeColor(args []string) (string, error) {
+	if len(args) < 3 {
+		return "", fmt.Errorf("Usage: theme setcolor <theme_name> <color_element> <hex_value>")
+	}
+
+	themeName := args[0]
+	colorElement := args[1]
+	hexValue := args[2]
+
+	err := sh.ThemeManager.SetColor(themeName, colorElement, hexValue)
+	if err != nil {
+		return "", fmt.Errorf("Failed to set color: %v", err)
+	}
+
+	return fmt.Sprintf("Color '%s' set to %s in theme '%s' ✨",
+		sh.ThemeManager.Colorize("accent", colorElement),
+		sh.ThemeManager.Colorize("info", hexValue),
+		sh.ThemeManager.Colorize("primary", themeName)), nil
+}
+
+// validateTheme validates a theme
+func (sh *SystemHooks) validateTheme(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme name required")
+	}
+
+	themeName := args[0]
+	theme, err := sh.ThemeManager.GetTheme(themeName)
+	if err != nil {
+		return "", fmt.Errorf("Theme not found: %v", err)
+	}
+
+	err = sh.ThemeManager.ValidateTheme(theme)
+	if err != nil {
+		return fmt.Sprintf("Theme validation failed: %v", err), nil
+	}
+
+	return fmt.Sprintf("Theme '%s' is valid! ✨",
+		sh.ThemeManager.Colorize("primary", themeName)), nil
+}
+
+// manageCache manages the color cache
+func (sh *SystemHooks) manageCache(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Cache operation required: clear, stats")
+	}
+
+	operation := args[0]
+
+	switch operation {
+	case "clear":
+		sh.ThemeManager.ClearCache()
+		return "Color cache cleared successfully ✨", nil
+	case "stats":
+		stats := sh.ThemeManager.GetCacheStats()
+		result := fmt.Sprintf("🎨 Color Cache Statistics:\n")
+		result += fmt.Sprintf("Cache Size: %d entries\n", stats["cache_size"])
+		if keys, ok := stats["cache_keys"].([]string); ok && len(keys) > 0 {
+			result += fmt.Sprintf("Sample Keys: %s\n", strings.Join(keys[:min(5, len(keys))], ", "))
+		}
+		return result, nil
+	default:
+		return "", fmt.Errorf("Unknown cache operation: %s", operation)
+	}
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // HandleFileDeletion handles file deletion with safety checks

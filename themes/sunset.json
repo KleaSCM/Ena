@@ -1,0 +1,21 @@
+{
+  "colors": {
+    "accent": "#feb47b",
+    "background": "#ffffff",
+    "border": "#e2e8f0",
+    "error": "#dc2626",
+    "foreground": "#1e293b",
+    "highlight": "#f1f5f9",
+    "info": "#0891b2",
+    "muted": "#94a3b8",
+    "primary": "#ff7e5f",
+    "secondary": "#64748b",
+    "success": "#16a34a",
+    "warning": "#ea580c"
+  },
+  "created_at": "109251",
+  "description": "Beautiful sunset theme",
+  "is_dark": false,
+  "name": "sunset",
+  "version": "1.0"
+}

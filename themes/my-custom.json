@@ -1,0 +1,21 @@
+{
+  "colors": {
+    "accent": "#4ecdc4",
+    "background": "#0f172a",
+    "border": "#334155",
+    "error": "#ef4444",
+    "foreground": "#f8fafc",
+    "highlight": "#1e293b",
+    "info": "#06b6d4",
+    "muted": "#64748b",
+    "primary": "#ff6b6b",
+    "secondary": "#94a3b8",
+    "success": "#22c55e",
+    "warning": "#f59e0b"
+  },
+  "created_at": "108276",
+  "description": "My custom theme",
+  "is_dark": true,
+  "name": "my-custom",
+  "version": "1.0"
+}

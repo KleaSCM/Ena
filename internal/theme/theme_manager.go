@@ -617,12 +617,8 @@ func (tm *ThemeManager) applyColor(hexColor, text string) string {
 
 	// Parse hex color using gookit/color
 	var result string
-	if c, err := gookitcolor.HEX(hexColor); err == nil {
-		result = c.Sprint(text)
-	} else {
-		// Fallback to fatih/color for known colors
-		result = tm.fallbackColor(hexColor, text)
-	}
+	c := gookitcolor.HEX(hexColor)
+	result = c.Sprint(text)
 
 	// Cache the result
 	tm.cacheMutex.Lock()
@@ -969,6 +965,44 @@ func (tm *ThemeManager) CreateCustomTheme(name, description string, isDark bool,
 	}
 
 	tm.themes[name] = theme
+
+	// Automatically save custom theme to disk
+	if err := tm.saveThemeToDisk(theme); err != nil {
+		// Log error but don't fail the creation
+		fmt.Printf("Warning: Failed to save theme to disk: %v\n", err)
+	}
+
+	return nil
+}
+
+// saveThemeToDisk saves a theme to disk without validation (internal use)
+func (tm *ThemeManager) saveThemeToDisk(theme *ColorScheme) error {
+	// Create themes directory if it doesn't exist
+	if err := os.MkdirAll(tm.themePath, 0755); err != nil {
+		return fmt.Errorf("failed to create themes directory: %v", err)
+	}
+
+	// Create theme data for export
+	themeData := map[string]interface{}{
+		"name":        theme.Name,
+		"description": theme.Description,
+		"is_dark":     theme.IsDark,
+		"colors":      theme.Colors,
+		"version":     "1.0",
+		"created_at":  fmt.Sprintf("%d", os.Getpid()), // Simple timestamp
+	}
+
+	// Save as JSON
+	filename := filepath.Join(tm.themePath, theme.Name+".json")
+	data, err := json.MarshalIndent(themeData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal theme data: %v", err)
+	}
+
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		return fmt.Errorf("failed to write theme file: %v", err)
+	}
+
 	return nil
 }
 
