@@ -13,7 +13,7 @@
 ## 🧠 Intelligence & Automation
 - [x] **Smart suggestions** based on usage patterns ✅
 - [ ] **Command aliases** (e.g., "ls" → "terminal execute ls -la")
-- [ ] **Batch operations** (delete multiple files, copy folders recursively)
+- [x] **Batch operations** (delete multiple files, copy folders recursively) ✅
 - [ ] **Undo functionality** for file operations
 - [ ] **Smart file organization** (auto-sort downloads, organize by type)
 - [ ] **Pattern-based operations** (find all .txt files older than 30 days)

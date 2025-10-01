@@ -104,6 +104,11 @@ func GetHelpEntries() []HelpEntry {
 		{"🧠 Smart Suggestions", "feedback <id> <type>", "Provide feedback on suggestions"},
 		{"🧠 Smart Suggestions", "workflow", "Show workflow optimization suggestions"},
 		{"🧠 Smart Suggestions", "optimize", "Show system optimization suggestions"},
+		{"📦 Batch Operations", "batch-delete <paths...>", "Delete multiple files/folders with progress tracking"},
+		{"📦 Batch Operations", "batch-copy <sources...> <dest>", "Copy multiple files/folders recursively"},
+		{"📦 Batch Operations", "batch-move <sources...> <dest>", "Move multiple files/folders efficiently"},
+		{"📦 Batch Operations", "batch-status [job-id]", "Show status of batch operations"},
+		{"📦 Batch Operations", "batch-cancel <job-id>", "Cancel a running batch operation"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -148,6 +153,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupThemeCommands(rootCmd, assistant)
 	setupNotificationCommands(rootCmd, assistant)
 	setupSuggestionsCommands(rootCmd)
+	setupBatchCommands(rootCmd)
 
 	return rootCmd
 }

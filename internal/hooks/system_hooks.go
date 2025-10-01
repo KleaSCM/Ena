@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"ena/internal/batch"
 	"ena/internal/browser"
 	"ena/internal/notifications"
 	"ena/internal/progress"
@@ -68,6 +69,7 @@ type SystemHooks struct {
 	ThemeManager        *theme.ThemeManager
 	NotificationManager *notifications.NotificationManager
 	UsageAnalytics      *suggestions.UsageAnalytics
+	BatchManager        *batch.BatchManager
 }
 
 // Global theme manager instance for persistence
@@ -79,6 +81,9 @@ var globalNotificationManager *notifications.NotificationManager
 // Global analytics instance for persistence
 var globalAnalytics *suggestions.UsageAnalytics
 
+// Global batch manager instance for persistence
+var globalBatchManager *batch.BatchManager
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
@@ -89,6 +94,7 @@ func NewSystemHooks() *SystemHooks {
 		ThemeManager:        getGlobalThemeManager(),
 		NotificationManager: getGlobalNotificationManager(),
 		UsageAnalytics:      getGlobalAnalytics(),
+		BatchManager:        getGlobalBatchManager(),
 	}
 }
 
@@ -115,6 +121,14 @@ func getGlobalAnalytics() *suggestions.UsageAnalytics {
 		globalAnalytics = suggestions.NewUsageAnalytics()
 	}
 	return globalAnalytics
+}
+
+// getGlobalBatchManager returns the global batch manager instance
+func getGlobalBatchManager() *batch.BatchManager {
+	if globalBatchManager == nil {
+		globalBatchManager = batch.NewBatchManager(getGlobalAnalytics())
+	}
+	return globalBatchManager
 }
 
 // HandleFileOperation processes file-related commands
