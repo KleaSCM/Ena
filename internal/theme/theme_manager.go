@@ -6,18 +6,24 @@
  * Author: KleaSCM
  * Email: KleaSCM@gmail.com
  * File: theme_manager.go
- * Description: Advanced theming system with color schemes, dark/light modes, and customization
+ * Description: theming system with color schemes, dark/light modes, and customization
  */
 
 package theme
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/fatih/color"
+	gookitcolor "github.com/gookit/color"
 )
 
 // ColorScheme represents a complete color scheme
@@ -35,7 +41,35 @@ type ThemeManager struct {
 	mutex        sync.RWMutex
 	colorEnabled bool
 	autoDetect   bool
+	colorCache   map[string]string
+	cacheMutex   sync.RWMutex
+	themePath    string
+	validators   []ThemeValidator
 }
+
+// ThemeValidator interface for theme validation
+type ThemeValidator interface {
+	Validate(theme *ColorScheme) error
+}
+
+// HexColorValidator validates hex color format
+type HexColorValidator struct{}
+
+// RequiredColorsValidator validates required color keys
+type RequiredColorsValidator struct {
+	RequiredColors []string
+}
+
+// ThemeDetector interface for theme detection
+type ThemeDetector interface {
+	Detect() (string, error)
+}
+
+// OSThemeDetector detects OS-level theme preferences
+type OSThemeDetector struct{}
+
+// EnvironmentThemeDetector detects theme from environment variables
+type EnvironmentThemeDetector struct{}
 
 // Color constants for different UI elements
 const (
@@ -69,10 +103,19 @@ func NewThemeManager() *ThemeManager {
 		themes:       make(map[string]*ColorScheme),
 		colorEnabled: true,
 		autoDetect:   true,
+		colorCache:   make(map[string]string),
+		themePath:    "themes",
+		validators:   make([]ThemeValidator, 0),
 	}
+
+	// Initialize validators
+	tm.initializeValidators()
 
 	// Initialize default themes
 	tm.initializeDefaultThemes()
+
+	// Load custom themes from disk
+	tm.loadCustomThemes()
 
 	// Auto-detect system theme if enabled
 	if tm.autoDetect {
@@ -80,6 +123,22 @@ func NewThemeManager() *ThemeManager {
 	}
 
 	return tm
+}
+
+// initializeValidators sets up theme validators
+func (tm *ThemeManager) initializeValidators() {
+	// Add hex color validator
+	tm.validators = append(tm.validators, &HexColorValidator{})
+
+	// Add required colors validator
+	requiredColors := []string{
+		ColorPrimary, ColorSecondary, ColorSuccess, ColorWarning,
+		ColorError, ColorInfo, ColorBackground, ColorForeground,
+		ColorAccent, ColorMuted, ColorBorder, ColorHighlight,
+	}
+	tm.validators = append(tm.validators, &RequiredColorsValidator{
+		RequiredColors: requiredColors,
+	})
 }
 
 // initializeDefaultThemes sets up built-in themes
@@ -295,9 +354,9 @@ func (tm *ThemeManager) initializeDefaultThemes() {
 	}
 }
 
-// detectSystemTheme detects the system theme preference
+// detectSystemTheme detects the system theme preference using multiple detectors
 func (tm *ThemeManager) detectSystemTheme() {
-	// Check for common environment variables
+	// Check for explicit theme setting
 	if theme := os.Getenv("ENA_THEME"); theme != "" {
 		if _, exists := tm.themes[theme]; exists {
 			tm.currentTheme = theme
@@ -305,23 +364,163 @@ func (tm *ThemeManager) detectSystemTheme() {
 		}
 	}
 
-	// Check for system dark mode preference
-	if os.Getenv("COLORFGBG") != "" {
-		// Terminal color scheme detection
-		if strings.Contains(os.Getenv("COLORFGBG"), "15;0") || strings.Contains(os.Getenv("COLORFGBG"), "7;0") {
-			tm.currentTheme = "dark"
-			return
-		}
+	// Try different detection methods
+	detectors := []ThemeDetector{
+		&EnvironmentThemeDetector{},
+		&OSThemeDetector{},
 	}
 
-	// Check for common dark mode indicators
-	if os.Getenv("DARK_MODE") == "1" || os.Getenv("DARKMODE") == "1" {
-		tm.currentTheme = "dark"
-		return
+	for _, detector := range detectors {
+		if theme, err := detector.Detect(); err == nil {
+			if _, exists := tm.themes[theme]; exists {
+				tm.currentTheme = theme
+				return
+			}
+		}
 	}
 
 	// Default to light theme
 	tm.currentTheme = "default"
+}
+
+// Detect implements ThemeDetector for EnvironmentThemeDetector
+func (d *EnvironmentThemeDetector) Detect() (string, error) {
+	// Check for common dark mode indicators
+	if os.Getenv("DARK_MODE") == "1" || os.Getenv("DARKMODE") == "1" {
+		return "dark", nil
+	}
+
+	// Check terminal color scheme
+	if colorFGBG := os.Getenv("COLORFGBG"); colorFGBG != "" {
+		if strings.Contains(colorFGBG, "15;0") || strings.Contains(colorFGBG, "7;0") {
+			return "dark", nil
+		}
+	}
+
+	// Check for GTK theme
+	if gtkTheme := os.Getenv("GTK_THEME"); gtkTheme != "" {
+		if strings.Contains(strings.ToLower(gtkTheme), "dark") {
+			return "dark", nil
+		}
+	}
+
+	return "", fmt.Errorf("no environment theme detected")
+}
+
+// Detect implements ThemeDetector for OSThemeDetector
+func (d *OSThemeDetector) Detect() (string, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		return d.detectMacOSTheme()
+	case "windows":
+		return d.detectWindowsTheme()
+	case "linux":
+		return d.detectLinuxTheme()
+	default:
+		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+}
+
+// detectMacOSTheme detects macOS theme preference
+func (d *OSThemeDetector) detectMacOSTheme() (string, error) {
+	cmd := exec.Command("defaults", "read", "-g", "AppleInterfaceStyle")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(strings.ToLower(string(output)), "dark") {
+		return "dark", nil
+	}
+	return "default", nil
+}
+
+// detectWindowsTheme detects Windows theme preference
+func (d *OSThemeDetector) detectWindowsTheme() (string, error) {
+	cmd := exec.Command("reg", "query", "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "/v", "AppsUseLightTheme")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(strings.ToLower(string(output)), "0x0") {
+		return "dark", nil
+	}
+	return "default", nil
+}
+
+// detectLinuxTheme detects Linux theme preference
+func (d *OSThemeDetector) detectLinuxTheme() (string, error) {
+	// Try different desktop environments
+	desktop := os.Getenv("XDG_CURRENT_DESKTOP")
+
+	switch {
+	case strings.Contains(strings.ToLower(desktop), "gnome"):
+		return d.detectGnomeTheme()
+	case strings.Contains(strings.ToLower(desktop), "kde"):
+		return d.detectKDETheme()
+	case strings.Contains(strings.ToLower(desktop), "xfce"):
+		return d.detectXFCETheme()
+	default:
+		// Fallback to GTK settings
+		return d.detectGTKTheme()
+	}
+}
+
+// detectGnomeTheme detects GNOME theme preference
+func (d *OSThemeDetector) detectGnomeTheme() (string, error) {
+	cmd := exec.Command("gsettings", "get", "org.gnome.desktop.interface", "color-scheme")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(strings.ToLower(string(output)), "dark") {
+		return "dark", nil
+	}
+	return "default", nil
+}
+
+// detectKDETheme detects KDE theme preference
+func (d *OSThemeDetector) detectKDETheme() (string, error) {
+	cmd := exec.Command("kreadconfig5", "--file", "kdeglobals", "--group", "General", "--key", "ColorScheme")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(strings.ToLower(string(output)), "dark") {
+		return "dark", nil
+	}
+	return "default", nil
+}
+
+// detectXFCETheme detects XFCE theme preference
+func (d *OSThemeDetector) detectXFCETheme() (string, error) {
+	cmd := exec.Command("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(strings.ToLower(string(output)), "dark") {
+		return "dark", nil
+	}
+	return "default", nil
+}
+
+// detectGTKTheme detects GTK theme preference
+func (d *OSThemeDetector) detectGTKTheme() (string, error) {
+	cmd := exec.Command("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Contains(strings.ToLower(string(output)), "dark") {
+		return "dark", nil
+	}
+	return "default", nil
 }
 
 // SetTheme sets the current theme
@@ -401,9 +600,40 @@ func (tm *ThemeManager) Colorize(element, text string) string {
 	return tm.applyColor(colorCode, text)
 }
 
-// applyColor applies a hex color to text
+// applyColor applies a hex color to text with caching
 func (tm *ThemeManager) applyColor(hexColor, text string) string {
-	// Convert hex to RGB and apply color
+	if !tm.colorEnabled {
+		return text
+	}
+
+	// Check cache first
+	tm.cacheMutex.RLock()
+	cacheKey := fmt.Sprintf("%s:%s", hexColor, text)
+	if cached, exists := tm.colorCache[cacheKey]; exists {
+		tm.cacheMutex.RUnlock()
+		return cached
+	}
+	tm.cacheMutex.RUnlock()
+
+	// Parse hex color using gookit/color
+	var result string
+	if c, err := gookitcolor.HEX(hexColor); err == nil {
+		result = c.Sprint(text)
+	} else {
+		// Fallback to fatih/color for known colors
+		result = tm.fallbackColor(hexColor, text)
+	}
+
+	// Cache the result
+	tm.cacheMutex.Lock()
+	tm.colorCache[cacheKey] = result
+	tm.cacheMutex.Unlock()
+
+	return result
+}
+
+// fallbackColor provides fallback color mapping for known hex values
+func (tm *ThemeManager) fallbackColor(hexColor, text string) string {
 	switch hexColor {
 	case "#2563eb", "#3b82f6": // Blue variants
 		return color.New(color.FgBlue).Sprint(text)
@@ -520,4 +750,291 @@ func (tm *ThemeManager) ExportTheme(themeName string) (string, error) {
 	}
 
 	return result, nil
+}
+
+// Validate implements ThemeValidator for HexColorValidator
+func (v *HexColorValidator) Validate(theme *ColorScheme) error {
+	hexRegex := regexp.MustCompile(`^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$`)
+
+	for colorName, colorValue := range theme.Colors {
+		if !hexRegex.MatchString(colorValue) {
+			return fmt.Errorf("invalid hex color '%s' for color element '%s'", colorValue, colorName)
+		}
+	}
+	return nil
+}
+
+// Validate implements ThemeValidator for RequiredColorsValidator
+func (v *RequiredColorsValidator) Validate(theme *ColorScheme) error {
+	for _, requiredColor := range v.RequiredColors {
+		if _, exists := theme.Colors[requiredColor]; !exists {
+			return fmt.Errorf("missing required color element: %s", requiredColor)
+		}
+	}
+	return nil
+}
+
+// ValidateTheme validates a theme using all registered validators
+func (tm *ThemeManager) ValidateTheme(theme *ColorScheme) error {
+	for _, validator := range tm.validators {
+		if err := validator.Validate(theme); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetColor sets a specific color in a theme
+func (tm *ThemeManager) SetColor(themeName, element, hexValue string) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	theme, exists := tm.themes[themeName]
+	if !exists {
+		return fmt.Errorf("theme '%s' does not exist", themeName)
+	}
+
+	// Validate hex color format
+	hexRegex := regexp.MustCompile(`^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$`)
+	if !hexRegex.MatchString(hexValue) {
+		return fmt.Errorf("invalid hex color format: %s", hexValue)
+	}
+
+	// Update the color
+	theme.Colors[element] = hexValue
+
+	// Clear cache for this theme
+	tm.clearThemeCache(themeName)
+
+	return nil
+}
+
+// clearThemeCache clears cached colors for a specific theme
+func (tm *ThemeManager) clearThemeCache(themeName string) {
+	tm.cacheMutex.Lock()
+	defer tm.cacheMutex.Unlock()
+
+	// Remove cached colors that might be affected by theme changes
+	for key := range tm.colorCache {
+		if strings.Contains(key, themeName) {
+			delete(tm.colorCache, key)
+		}
+	}
+}
+
+// SaveTheme saves a theme to disk
+func (tm *ThemeManager) SaveTheme(themeName string) error {
+	tm.mutex.RLock()
+	theme, exists := tm.themes[themeName]
+	tm.mutex.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("theme '%s' does not exist", themeName)
+	}
+
+	// Validate theme before saving
+	if err := tm.ValidateTheme(theme); err != nil {
+		return fmt.Errorf("theme validation failed: %v", err)
+	}
+
+	// Create themes directory if it doesn't exist
+	if err := os.MkdirAll(tm.themePath, 0755); err != nil {
+		return fmt.Errorf("failed to create themes directory: %v", err)
+	}
+
+	// Create theme data for export
+	themeData := map[string]interface{}{
+		"name":        theme.Name,
+		"description": theme.Description,
+		"is_dark":     theme.IsDark,
+		"colors":      theme.Colors,
+		"version":     "1.0",
+		"created_at":  fmt.Sprintf("%d", os.Getpid()), // Simple timestamp
+	}
+
+	// Save as JSON
+	filename := filepath.Join(tm.themePath, themeName+".json")
+	data, err := json.MarshalIndent(themeData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal theme data: %v", err)
+	}
+
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		return fmt.Errorf("failed to write theme file: %v", err)
+	}
+
+	return nil
+}
+
+// LoadTheme loads a theme from disk
+func (tm *ThemeManager) LoadTheme(filename string) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("failed to read theme file: %v", err)
+	}
+
+	var themeData map[string]interface{}
+	if err := json.Unmarshal(data, &themeData); err != nil {
+		return fmt.Errorf("failed to parse theme file: %v", err)
+	}
+
+	// Extract theme information
+	name, ok := themeData["name"].(string)
+	if !ok {
+		return fmt.Errorf("invalid theme name in file")
+	}
+
+	description, ok := themeData["description"].(string)
+	if !ok {
+		description = "Custom theme"
+	}
+
+	isDark, ok := themeData["is_dark"].(bool)
+	if !ok {
+		isDark = false
+	}
+
+	colors, ok := themeData["colors"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid colors data in theme file")
+	}
+
+	// Convert colors to string map
+	colorMap := make(map[string]string)
+	for key, value := range colors {
+		if colorStr, ok := value.(string); ok {
+			colorMap[key] = colorStr
+		}
+	}
+
+	// Create theme
+	theme := &ColorScheme{
+		Name:        name,
+		Description: description,
+		IsDark:      isDark,
+		Colors:      colorMap,
+	}
+
+	// Validate theme
+	if err := tm.ValidateTheme(theme); err != nil {
+		return fmt.Errorf("loaded theme validation failed: %v", err)
+	}
+
+	// Add theme to manager
+	tm.mutex.Lock()
+	tm.themes[name] = theme
+	tm.mutex.Unlock()
+
+	return nil
+}
+
+// loadCustomThemes loads all custom themes from the themes directory
+func (tm *ThemeManager) loadCustomThemes() {
+	if _, err := os.Stat(tm.themePath); os.IsNotExist(err) {
+		return
+	}
+
+	files, err := filepath.Glob(filepath.Join(tm.themePath, "*.json"))
+	if err != nil {
+		return
+	}
+
+	for _, file := range files {
+		if err := tm.LoadTheme(file); err != nil {
+			// Log error but continue loading other themes
+			continue
+		}
+	}
+}
+
+// CreateCustomTheme creates a new custom theme
+func (tm *ThemeManager) CreateCustomTheme(name, description string, isDark bool, colors map[string]string) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	if _, exists := tm.themes[name]; exists {
+		return fmt.Errorf("theme '%s' already exists", name)
+	}
+
+	theme := &ColorScheme{
+		Name:        name,
+		Description: description,
+		IsDark:      isDark,
+		Colors:      colors,
+	}
+
+	// Validate theme
+	if err := tm.ValidateTheme(theme); err != nil {
+		return fmt.Errorf("theme validation failed: %v", err)
+	}
+
+	tm.themes[name] = theme
+	return nil
+}
+
+// DeleteTheme removes a theme
+func (tm *ThemeManager) DeleteTheme(themeName string) error {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	if _, exists := tm.themes[themeName]; !exists {
+		return fmt.Errorf("theme '%s' does not exist", themeName)
+	}
+
+	// Don't allow deletion of built-in themes
+	builtInThemes := []string{"default", "dark", "solarized-light", "solarized-dark", "monokai", "dracula", "nord"}
+	for _, builtIn := range builtInThemes {
+		if themeName == builtIn {
+			return fmt.Errorf("cannot delete built-in theme '%s'", themeName)
+		}
+	}
+
+	delete(tm.themes, themeName)
+
+	// Remove theme file if it exists
+	filename := filepath.Join(tm.themePath, themeName+".json")
+	if _, err := os.Stat(filename); err == nil {
+		os.Remove(filename)
+	}
+
+	// Clear cache
+	tm.clearThemeCache(themeName)
+
+	return nil
+}
+
+// GetThemePath returns the current theme path
+func (tm *ThemeManager) GetThemePath() string {
+	return tm.themePath
+}
+
+// SetThemePath sets the theme path
+func (tm *ThemeManager) SetThemePath(path string) {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+	tm.themePath = path
+}
+
+// ClearCache clears the color cache
+func (tm *ThemeManager) ClearCache() {
+	tm.cacheMutex.Lock()
+	defer tm.cacheMutex.Unlock()
+	tm.colorCache = make(map[string]string)
+}
+
+// GetCacheStats returns cache statistics
+func (tm *ThemeManager) GetCacheStats() map[string]interface{} {
+	tm.cacheMutex.RLock()
+	defer tm.cacheMutex.RUnlock()
+
+	return map[string]interface{}{
+		"cache_size": len(tm.colorCache),
+		"cache_keys": func() []string {
+			keys := make([]string, 0, len(tm.colorCache))
+			for key := range tm.colorCache {
+				keys = append(keys, key)
+			}
+			return keys
+		}(),
+	}
 }
