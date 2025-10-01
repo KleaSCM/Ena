@@ -7,8 +7,7 @@
 - [x] **Interactive file browser** with arrow key navigation ✅
 - [x] **Advanced Progress bars** with pause/resume, terminal compatibility, persistent state, and concurrency safety ✅
 - [x] **Real-time file watching** with live updates
-- [ ] **Custom themes** (dark/light mode, color schemes)
-- [ ] **Sound effects** for different operations (optional)
+- [x] **Custom themes** (dark/light mode, color schemes)
 - [ ] **Desktop notifications** for completed tasks
 
 ## 🧠 Intelligence & Automation

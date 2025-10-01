@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"ena/internal/browser"
+	"ena/internal/notifications"
 	"ena/internal/progress"
 	"ena/internal/theme"
 	"ena/internal/watcher"
@@ -59,24 +60,29 @@ func requireArgs(args []string, n int, context string) error {
 
 // SystemHooks handles all system-level operations
 type SystemHooks struct {
-	FileManager     *system.FileManager
-	TerminalManager *system.TerminalManager
-	AppManager      *system.AppManager
-	FileWatcher     *watcher.FileWatcher
-	ThemeManager    *theme.ThemeManager
+	FileManager         *system.FileManager
+	TerminalManager     *system.TerminalManager
+	AppManager          *system.AppManager
+	FileWatcher         *watcher.FileWatcher
+	ThemeManager        *theme.ThemeManager
+	NotificationManager *notifications.NotificationManager
 }
 
 // Global theme manager instance for persistence
 var globalThemeManager *theme.ThemeManager
 
+// Global notification manager instance for persistence
+var globalNotificationManager *notifications.NotificationManager
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
 	return &SystemHooks{
-		FileManager:     system.NewFileManager(),
-		TerminalManager: system.NewTerminalManager(),
-		AppManager:      system.NewAppManager(),
-		ThemeManager:    getGlobalThemeManager(),
+		FileManager:         system.NewFileManager(),
+		TerminalManager:     system.NewTerminalManager(),
+		AppManager:          system.NewAppManager(),
+		ThemeManager:        getGlobalThemeManager(),
+		NotificationManager: getGlobalNotificationManager(),
 	}
 }
 
@@ -86,6 +92,15 @@ func getGlobalThemeManager() *theme.ThemeManager {
 		globalThemeManager = theme.NewThemeManager()
 	}
 	return globalThemeManager
+}
+
+// getGlobalNotificationManager returns the global notification manager instance
+func getGlobalNotificationManager() *notifications.NotificationManager {
+	if globalNotificationManager == nil {
+		globalNotificationManager = notifications.NewNotificationManager()
+		globalNotificationManager.StartCleanupRoutine() // Start background cleanup
+	}
+	return globalNotificationManager
 }
 
 // HandleFileOperation processes file-related commands
@@ -1783,4 +1798,226 @@ func (sh *SystemHooks) GetSystemInfo() (string, error) {
 	info = append(info, fmt.Sprintf("  PATH: %s", os.Getenv("PATH")))
 
 	return strings.Join(info, "\n"), nil
+}
+
+// HandleNotificationOperation handles notification-related commands
+func (sh *SystemHooks) HandleNotificationOperation(args []string) (string, error) {
+	if err := requireArgs(args, 1, "Notification operation"); err != nil {
+		return "", err
+	}
+
+	operation := args[0]
+
+	switch operation {
+	case "test":
+		// Send test notification
+		return sh.testNotification()
+	case "send":
+		// Send custom notification
+		return sh.sendCustomNotification(args[1:])
+	case "status":
+		// Show notification status
+		return sh.showNotificationStatus()
+	case "history":
+		// Show notification history
+		return sh.showNotificationHistory()
+	case "clear":
+		// Clear notification history
+		return sh.clearNotificationHistory()
+	case "enable":
+		// Enable notifications
+		return sh.enableNotifications()
+	case "disable":
+		// Disable notifications
+		return sh.disableNotifications()
+	case "config":
+		// Show notification configuration
+		return sh.showNotificationConfig()
+	case "demo":
+		// Demonstrate different notification types
+		return sh.demonstrateNotifications()
+	default:
+		return "", fmt.Errorf("Unknown notification operation: %s", operation)
+	}
+}
+
+// testNotification sends a test notification
+func (sh *SystemHooks) testNotification() (string, error) {
+	err := sh.NotificationManager.TestNotification()
+	if err != nil {
+		return "", fmt.Errorf("Failed to send test notification: %v", err)
+	}
+
+	return "Test notification sent! Check your desktop ✨", nil
+}
+
+// sendCustomNotification sends a custom notification
+func (sh *SystemHooks) sendCustomNotification(args []string) (string, error) {
+	if len(args) < 2 {
+		return "", fmt.Errorf("Usage: notify send <type> <title> <message>")
+	}
+
+	notificationType := args[0]
+	title := args[1]
+	message := ""
+	if len(args) > 2 {
+		message = strings.Join(args[2:], " ")
+	}
+
+	var notification *notifications.Notification
+
+	switch notificationType {
+	case "success":
+		notification = sh.NotificationManager.CreateSuccessNotification(title, message)
+	case "error":
+		notification = sh.NotificationManager.CreateErrorNotification(title, message)
+	case "warning":
+		notification = sh.NotificationManager.CreateWarningNotification(title, message)
+	case "info":
+		notification = sh.NotificationManager.CreateInfoNotification(title, message)
+	case "task":
+		notification = sh.NotificationManager.CreateTaskNotification(title, message)
+	default:
+		return "", fmt.Errorf("Unknown notification type: %s", notificationType)
+	}
+
+	err := sh.NotificationManager.SendNotification(notification)
+	if err != nil {
+		return "", fmt.Errorf("Failed to send notification: %v", err)
+	}
+
+	return fmt.Sprintf("Notification sent successfully! ✨"), nil
+}
+
+// showNotificationStatus shows notification system status
+func (sh *SystemHooks) showNotificationStatus() (string, error) {
+	status := "🔔 Notification System Status:\n\n"
+
+	enabled := sh.NotificationManager.IsEnabled()
+	if enabled {
+		status += "Status: " + sh.ThemeManager.Colorize("success", "Enabled") + "\n"
+	} else {
+		status += "Status: " + sh.ThemeManager.Colorize("error", "Disabled") + "\n"
+	}
+
+	platformInfo := sh.NotificationManager.GetPlatformInfo()
+	status += fmt.Sprintf("Platform: %s\n", platformInfo["platform"])
+
+	// Check platform-specific capabilities
+	switch platformInfo["platform"] {
+	case "darwin":
+		if available, ok := platformInfo["osascript_available"].(bool); ok && available {
+			status += "macOS Support: " + sh.ThemeManager.Colorize("success", "Available") + "\n"
+		} else {
+			status += "macOS Support: " + sh.ThemeManager.Colorize("error", "Not Available") + "\n"
+		}
+	case "linux":
+		if available, ok := platformInfo["notify_send_available"].(bool); ok && available {
+			status += "Linux Support: " + sh.ThemeManager.Colorize("success", "Available") + "\n"
+		} else {
+			status += "Linux Support: " + sh.ThemeManager.Colorize("error", "Not Available") + "\n"
+		}
+	case "windows":
+		status += "Windows Support: " + sh.ThemeManager.Colorize("success", "Available") + "\n"
+	}
+
+	activeNotifications := sh.NotificationManager.GetActiveNotifications()
+	status += fmt.Sprintf("Active Notifications: %d\n", len(activeNotifications))
+
+	return status, nil
+}
+
+// showNotificationHistory shows notification history
+func (sh *SystemHooks) showNotificationHistory() (string, error) {
+	history := sh.NotificationManager.GetHistory()
+
+	if len(history) == 0 {
+		return "No notifications in history 📝", nil
+	}
+
+	result := fmt.Sprintf("🔔 Notification History (%d entries):\n\n", len(history))
+
+	// Show last 10 notifications
+	start := 0
+	if len(history) > 10 {
+		start = len(history) - 10
+	}
+
+	for i := start; i < len(history); i++ {
+		notification := history[i]
+		result += fmt.Sprintf("%d. [%s] %s: %s\n",
+			i+1,
+			sh.ThemeManager.Colorize("accent", string(notification.Type)),
+			notification.Title,
+			notification.Message)
+	}
+
+	return result, nil
+}
+
+// clearNotificationHistory clears notification history
+func (sh *SystemHooks) clearNotificationHistory() (string, error) {
+	sh.NotificationManager.ClearHistory()
+	return "Notification history cleared ✨", nil
+}
+
+// enableNotifications enables notifications
+func (sh *SystemHooks) enableNotifications() (string, error) {
+	sh.NotificationManager.SetEnabled(true)
+	return "Notifications enabled ✨", nil
+}
+
+// disableNotifications disables notifications
+func (sh *SystemHooks) disableNotifications() (string, error) {
+	sh.NotificationManager.SetEnabled(false)
+	return "Notifications disabled ✨", nil
+}
+
+// showNotificationConfig shows notification configuration
+func (sh *SystemHooks) showNotificationConfig() (string, error) {
+	config := sh.NotificationManager.GetConfig()
+
+	result := "🔔 Notification Configuration:\n\n"
+	result += fmt.Sprintf("Enabled: %t\n", config.Enabled)
+	result += fmt.Sprintf("Default Duration: %s\n", config.DefaultDuration)
+	result += fmt.Sprintf("Max History: %d\n", config.MaxHistory)
+	result += fmt.Sprintf("Sound Enabled: %t\n", config.SoundEnabled)
+	result += fmt.Sprintf("Icon Path: %s\n", config.IconPath)
+	result += fmt.Sprintf("Timeout: %s\n", config.Timeout)
+
+	return result, nil
+}
+
+// demonstrateNotifications demonstrates different notification types
+func (sh *SystemHooks) demonstrateNotifications() (string, error) {
+	fmt.Println("🔔 Notification Demonstration - Sending different types of notifications")
+
+	// Send different types of notifications
+	notifications := []struct {
+		title   string
+		message string
+		creator func(string, string) *notifications.Notification
+	}{
+		{"Success!", "Task completed successfully!", sh.NotificationManager.CreateSuccessNotification},
+		{"Warning", "This is a warning message", sh.NotificationManager.CreateWarningNotification},
+		{"Info", "Here's some useful information", sh.NotificationManager.CreateInfoNotification},
+		{"Task Complete", "File operation finished", sh.NotificationManager.CreateTaskNotification},
+	}
+
+	for i, notif := range notifications {
+		notification := notif.creator(notif.title, notif.message)
+		notification.Duration = 2 * time.Second // Short duration for demo
+
+		err := sh.NotificationManager.SendNotification(notification)
+		if err != nil {
+			fmt.Printf("Failed to send notification %d: %v\n", i+1, err)
+		} else {
+			fmt.Printf("Sent notification %d: %s\n", i+1, notif.title)
+		}
+
+		// Small delay between notifications
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	return "Notification demonstration completed! ✨", nil
 }

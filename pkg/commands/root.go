@@ -94,6 +94,11 @@ func GetHelpEntries() []HelpEntry {
 		{"🎨 Theme Management", "theme setcolor <theme> <element> <hex>", "Set specific color"},
 		{"🎨 Theme Management", "theme validate <name>", "Validate theme"},
 		{"🎨 Theme Management", "theme cache <clear|stats>", "Manage color cache"},
+		{"🔔 Desktop Notifications", "notify test", "Send test notification"},
+		{"🔔 Desktop Notifications", "notify send <type> <title> <message>", "Send custom notification"},
+		{"🔔 Desktop Notifications", "notify status", "Show notification system status"},
+		{"🔔 Desktop Notifications", "notify history", "Show notification history"},
+		{"🔔 Desktop Notifications", "notify demo", "Demonstrate all notification types"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -136,6 +141,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupPauseCommands(rootCmd, assistant)
 	setupWatchCommands(rootCmd, assistant)
 	setupThemeCommands(rootCmd, assistant)
+	setupNotificationCommands(rootCmd, assistant)
 
 	return rootCmd
 }

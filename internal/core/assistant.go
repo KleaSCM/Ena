@@ -101,6 +101,8 @@ func (a *Assistant) ProcessCommand(command string, args []string) (string, error
 		return a.SystemHooks.HandleFileWatching(args)
 	case "theme":
 		return a.SystemHooks.HandleThemeOperation(args)
+	case "notify":
+		return a.SystemHooks.HandleNotificationOperation(args)
 	default:
 		return "", fmt.Errorf("Unknown command: \"%s\" - I don't understand that! 😅", command)
 	}
