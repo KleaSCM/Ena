@@ -115,6 +115,8 @@ func (a *Assistant) ProcessCommand(command string, args []string) (string, error
 		return a.SystemHooks.HandleOptimizeOperation(args)
 	case "pattern":
 		return a.SystemHooks.HandlePatternOperation(args)
+	case "backup":
+		return a.SystemHooks.HandleBackupOperation(args)
 	default:
 		return "", fmt.Errorf("Unknown command: \"%s\" - I don't understand that! 😅", command)
 	}

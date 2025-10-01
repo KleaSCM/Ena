@@ -1,0 +1,38 @@
+[
+  {
+    "original_path": "test_backup.txt",
+    "backup_path": "/home/klea/.ena/backups/2025-10-02_01-35-19_test_backup.txt_backup_1759336519142938527",
+    "checksum": "677dca0e2ed7e19ee646bf035a194996",
+    "size": 21,
+    "type": "file",
+    "status": "verified",
+    "created_at": "2025-10-02T01:35:19.14295607+09:00",
+    "expires_at": "2025-11-01T01:35:19.14295627+09:00",
+    "operation_id": "manual_1759336519142921354",
+    "description": "Test backup",
+    "tags": [
+      "test",
+      "example"
+    ],
+    "compressed": true,
+    "encrypted": false
+  },
+  {
+    "original_path": "test_delete.txt",
+    "backup_path": "/home/klea/.ena/backups/2025-10-02_01-36-45_test_delete.txt_backup_1759336605425446601",
+    "checksum": "0bc0dcfa6655e72d39bf84a7cb91eb63",
+    "size": 23,
+    "type": "file",
+    "status": "verified",
+    "created_at": "2025-10-02T01:36:45.425450649+09:00",
+    "expires_at": "2025-11-01T01:36:45.425450849+09:00",
+    "operation_id": "delete_1759336605425443926",
+    "description": "Automatic backup before deletion of test_delete.txt",
+    "tags": [
+      "auto",
+      "delete"
+    ],
+    "compressed": true,
+    "encrypted": false
+  }
+]

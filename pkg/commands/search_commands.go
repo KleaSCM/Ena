@@ -57,6 +57,10 @@ Examples:
   ena delete /path/to/file.txt --force`,
 		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			force, _ := cmd.Flags().GetBool("force")
+			if force {
+				args = append(args, "--force")
+			}
 			result, err := assistant.ProcessCommand("delete", args)
 			if err != nil {
 				color.New(color.FgRed).Printf("❌ Error: %v\n", err)
@@ -65,6 +69,8 @@ Examples:
 			}
 		},
 	}
+
+	deleteCmd.Flags().Bool("force", false, "Force deletion without confirmation")
 
 	rootCmd.AddCommand(searchCmd)
 	rootCmd.AddCommand(deleteCmd)

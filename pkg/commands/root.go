@@ -128,6 +128,12 @@ func GetHelpEntries() []HelpEntry {
 		{"🔍 Pattern Operations", "execute-operation <id>", "Execute specific pattern operation"},
 		{"🔍 Pattern Operations", "execute-all", "Execute all enabled pattern operations"},
 		{"🔍 Pattern Operations", "remove-operation <id>", "Remove pattern operation"},
+		{"💾 Backup Operations", "create-backup <path>", "Create a backup of a file or directory"},
+		{"💾 Backup Operations", "list-backups", "List all backups with details"},
+		{"💾 Backup Operations", "restore-backup <id> [dest]", "Restore a backup to original or new location"},
+		{"💾 Backup Operations", "delete-backup <id>", "Delete a backup and its files"},
+		{"💾 Backup Operations", "backup-stats", "Show backup system statistics"},
+		{"💾 Backup Operations", "backup-cleanup", "Clean up expired backups"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -176,6 +182,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupUndoCommands(rootCmd)
 	setupOrganizerCommands(rootCmd)
 	setupPatternCommands(rootCmd)
+	setupBackupCommands(rootCmd)
 
 	return rootCmd
 }

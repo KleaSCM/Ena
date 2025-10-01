@@ -16,8 +16,8 @@
 - [x] **Batch operations** (delete multiple files, copy folders recursively) ✅
 - [x] **Undo functionality** for file operations ✅
 - [x] **Smart file organization** (auto-sort downloads, organize by type) ✅
-- [ ] **Pattern-based operations** (find all .txt files older than 30 days)
-- [ ] **Automated backups** before destructive operations
+- [x] **Pattern-based operations** (find all .txt files older than 30 days)
+- [x] **Automated backups** before destructive operations ✅
 - [ ] **Smart app detection** (auto-detect installed applications)
 - [ ] **System optimization suggestions** (cleanup temp files, etc.)
 

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"ena/internal/backup"
 	"ena/internal/batch"
 	"ena/internal/browser"
 	"ena/internal/notifications"
@@ -76,6 +77,7 @@ type SystemHooks struct {
 	UndoManager         *undo.UndoManager
 	FileOrganizer       *organizer.FileOrganizer
 	PatternEngine       *patterns.PatternEngine
+	BackupEngine        *backup.BackupEngine
 }
 
 // Global theme manager instance for persistence
@@ -99,6 +101,9 @@ var globalFileOrganizer *organizer.FileOrganizer
 // Global pattern engine instance for persistence
 var globalPatternEngine *patterns.PatternEngine
 
+// Global backup engine instance for persistence
+var globalBackupEngine *backup.BackupEngine
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
@@ -113,6 +118,7 @@ func NewSystemHooks() *SystemHooks {
 		UndoManager:         getGlobalUndoManager(),
 		FileOrganizer:       getGlobalFileOrganizer(),
 		PatternEngine:       getGlobalPatternEngine(),
+		BackupEngine:        getGlobalBackupEngine(),
 	}
 }
 
@@ -171,6 +177,14 @@ func getGlobalPatternEngine() *patterns.PatternEngine {
 		globalPatternEngine = patterns.NewPatternEngine(getGlobalAnalytics())
 	}
 	return globalPatternEngine
+}
+
+// getGlobalBackupEngine returns the global backup engine instance
+func getGlobalBackupEngine() *backup.BackupEngine {
+	if globalBackupEngine == nil {
+		globalBackupEngine = backup.NewBackupEngine(getGlobalAnalytics())
+	}
+	return globalBackupEngine
 }
 
 // HandleFileOperation processes file-related commands
@@ -1815,11 +1829,38 @@ func (sh *SystemHooks) HandleFileDeletion(args []string) (string, error) {
 	force := false
 
 	// Check for force flag for safety
-	if len(args) > 1 && args[1] == "--force" {
-		force = true
-	} else {
+	for i, arg := range args {
+		if arg == "--force" {
+			force = true
+			// Remove the --force flag from args
+			args = append(args[:i], args[i+1:]...)
+			break
+		}
+	}
+
+	if !force {
 		// Require --force flag for safety
 		return "", fmt.Errorf("File deletion requires --force flag for safety! 😅")
+	}
+
+	// Create backup before deletion if enabled
+	if sh.BackupEngine != nil {
+		config := sh.BackupEngine.GetConfig()
+		if config.Enabled {
+			// Check if file exists before creating backup
+			if _, err := os.Stat(path); err == nil {
+				operationID := fmt.Sprintf("delete_%d", time.Now().UnixNano())
+				_, backupErr := sh.BackupEngine.CreateBackup(path, operationID,
+					fmt.Sprintf("Automatic backup before deletion of %s", path),
+					[]string{"auto", "delete"})
+				if backupErr != nil {
+					// Log backup error but don't fail the operation
+					fmt.Printf("⚠️ Warning: Failed to create backup before deletion: %v\n", backupErr)
+				} else {
+					fmt.Printf("✅ Backup created before deletion\n")
+				}
+			}
+		}
 	}
 
 	return sh.FileManager.DeleteFile(path, force)
@@ -2387,4 +2428,83 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// HandleBackupOperation processes backup-related commands
+func (sh *SystemHooks) HandleBackupOperation(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Backup operation requires arguments")
+	}
+
+	operation := args[0]
+	switch operation {
+	case "create":
+		if len(args) < 2 {
+			return "", fmt.Errorf("Create backup requires file path")
+		}
+		filePath := args[1]
+
+		// Check if file exists
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return "", fmt.Errorf("File does not exist: %s", filePath)
+		}
+
+		operationID := fmt.Sprintf("manual_%d", time.Now().UnixNano())
+		metadata, err := sh.BackupEngine.CreateBackup(filePath, operationID,
+			fmt.Sprintf("Manual backup of %s", filepath.Base(filePath)), []string{"manual"})
+		if err != nil {
+			return "", fmt.Errorf("Failed to create backup: %v", err)
+		}
+
+		return fmt.Sprintf("✅ Backup created successfully!\n🆔 Backup ID: %s\n📂 Path: %s\n📊 Size: %s",
+			filepath.Base(metadata.BackupPath), metadata.BackupPath, formatFileSize(metadata.Size)), nil
+
+	case "list":
+		backups := sh.BackupEngine.ListBackups(map[string]interface{}{})
+		if len(backups) == 0 {
+			return "🌸 No backups found", nil
+		}
+
+		output := fmt.Sprintf("🌸 Found %d backups (╹◡╹)♡\n", len(backups))
+		output += "===============================\n"
+		for i, backup := range backups {
+			if i >= 10 { // Limit to first 10 results
+				output += fmt.Sprintf("... and %d more backups\n", len(backups)-10)
+				break
+			}
+			output += fmt.Sprintf("%d. %s (%s)\n", i+1, filepath.Base(backup.BackupPath), formatFileSize(backup.Size))
+			output += fmt.Sprintf("   📂 Original: %s\n", backup.OriginalPath)
+			output += fmt.Sprintf("   📅 Created: %s\n", backup.CreatedAt.Format("2006-01-02 15:04:05"))
+		}
+		return output, nil
+
+	case "stats":
+		stats := sh.BackupEngine.GetBackupStats()
+		output := "🌸 Backup System Statistics (╹◡╹)♡\n"
+		output += "===============================\n"
+		output += fmt.Sprintf("📊 Total Backups: %v\n", stats["total_backups"])
+		output += fmt.Sprintf("💾 Total Size: %s\n", formatFileSize(stats["total_size"].(int64)))
+
+		if statusCounts, ok := stats["status_counts"].(map[string]int); ok {
+			output += "📈 Status Distribution:\n"
+			for status, count := range statusCounts {
+				output += fmt.Sprintf("   %s: %d\n", status, count)
+			}
+		}
+		return output, nil
+
+	case "cleanup":
+		cleanedCount, err := sh.BackupEngine.CleanupExpiredBackups()
+		if err != nil {
+			return "", fmt.Errorf("Failed to cleanup backups: %v", err)
+		}
+
+		if cleanedCount == 0 {
+			return "✅ No expired backups found - system is clean!", nil
+		}
+		return fmt.Sprintf("✅ Cleaned up %d expired backups", cleanedCount), nil
+
+	default:
+		return "", fmt.Errorf("Unknown backup operation: %s", operation)
+	}
 }
