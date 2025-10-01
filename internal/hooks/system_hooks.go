@@ -23,6 +23,7 @@ import (
 
 	"ena/internal/browser"
 	"ena/internal/progress"
+	"ena/internal/theme"
 	"ena/internal/watcher"
 	"ena/pkg/system"
 )
@@ -62,6 +63,7 @@ type SystemHooks struct {
 	TerminalManager *system.TerminalManager
 	AppManager      *system.AppManager
 	FileWatcher     *watcher.FileWatcher
+	ThemeManager    *theme.ThemeManager
 }
 
 // NewSystemHooks creates a new instance of system hooks
@@ -71,6 +73,7 @@ func NewSystemHooks() *SystemHooks {
 		FileManager:     system.NewFileManager(),
 		TerminalManager: system.NewTerminalManager(),
 		AppManager:      system.NewAppManager(),
+		ThemeManager:    theme.NewThemeManager(),
 	}
 }
 
@@ -1218,6 +1221,247 @@ func (sh *SystemHooks) reloadConfig() (string, error) {
 	}
 
 	return "Configuration reloaded successfully ✨", nil
+}
+
+// HandleThemeOperation handles theme-related commands
+func (sh *SystemHooks) HandleThemeOperation(args []string) (string, error) {
+	if err := requireArgs(args, 1, "Theme operation"); err != nil {
+		return "", err
+	}
+
+	operation := args[0]
+
+	switch operation {
+	case "list":
+		// List available themes
+		return sh.listThemes()
+	case "current":
+		// Show current theme
+		return sh.showCurrentTheme()
+	case "set":
+		// Set theme
+		return sh.setTheme(args[1:])
+	case "preview":
+		// Preview theme
+		return sh.previewTheme(args[1:])
+	case "info":
+		// Show theme info
+		return sh.showThemeInfo(args[1:])
+	case "export":
+		// Export theme
+		return sh.exportTheme(args[1:])
+	case "demo":
+		// Demonstrate themes
+		return sh.demonstrateThemes()
+	case "toggle":
+		// Toggle between light and dark
+		return sh.toggleTheme()
+	default:
+		return "", fmt.Errorf("Unknown theme operation: %s", operation)
+	}
+}
+
+// listThemes lists all available themes
+func (sh *SystemHooks) listThemes() (string, error) {
+	themes := sh.ThemeManager.GetAvailableThemes()
+	currentTheme := sh.ThemeManager.GetCurrentTheme()
+
+	result := fmt.Sprintf("🎨 Available Themes:\n\n")
+
+	for _, themeName := range themes {
+		theme, err := sh.ThemeManager.GetTheme(themeName)
+		if err != nil {
+			continue
+		}
+
+		status := ""
+		if themeName == currentTheme {
+			status = sh.ThemeManager.Colorize("accent", " (current)")
+		}
+
+		mode := "Light"
+		if theme.IsDark {
+			mode = sh.ThemeManager.Colorize("info", "Dark")
+		} else {
+			mode = sh.ThemeManager.Colorize("warning", "Light")
+		}
+
+		result += fmt.Sprintf("  %s%s - %s (%s)\n",
+			sh.ThemeManager.Colorize("primary", themeName),
+			status,
+			theme.Description,
+			mode)
+	}
+
+	result += fmt.Sprintf("\nUse 'ena theme set <name>' to change theme\n")
+	result += fmt.Sprintf("Use 'ena theme preview <name>' to preview a theme\n")
+
+	return result, nil
+}
+
+// showCurrentTheme shows the current theme information
+func (sh *SystemHooks) showCurrentTheme() (string, error) {
+	currentTheme := sh.ThemeManager.GetCurrentTheme()
+	theme := sh.ThemeManager.GetCurrentColorScheme()
+
+	result := fmt.Sprintf("🎨 Current Theme: %s\n", sh.ThemeManager.Colorize("primary", currentTheme))
+	result += fmt.Sprintf("Description: %s\n", theme.Description)
+	result += fmt.Sprintf("Mode: %s\n", map[bool]string{true: "Dark", false: "Light"}[theme.IsDark])
+	result += fmt.Sprintf("Color Enabled: %t\n", sh.ThemeManager.IsColorEnabled())
+
+	return result, nil
+}
+
+// setTheme sets the current theme
+func (sh *SystemHooks) setTheme(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme name required")
+	}
+
+	themeName := args[0]
+	err := sh.ThemeManager.SetTheme(themeName)
+	if err != nil {
+		return "", fmt.Errorf("Failed to set theme: %v", err)
+	}
+
+	theme := sh.ThemeManager.GetCurrentColorScheme()
+	mode := "Light"
+	if theme.IsDark {
+		mode = sh.ThemeManager.Colorize("info", "Dark")
+	} else {
+		mode = sh.ThemeManager.Colorize("warning", "Light")
+	}
+
+	return fmt.Sprintf("Theme changed to %s (%s mode) ✨",
+		sh.ThemeManager.Colorize("primary", themeName), mode), nil
+}
+
+// previewTheme shows a preview of a theme
+func (sh *SystemHooks) previewTheme(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme name required for preview")
+	}
+
+	themeName := args[0]
+	preview, err := sh.ThemeManager.PreviewTheme(themeName)
+	if err != nil {
+		return "", fmt.Errorf("Failed to preview theme: %v", err)
+	}
+
+	return preview, nil
+}
+
+// showThemeInfo shows detailed information about a theme
+func (sh *SystemHooks) showThemeInfo(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme name required")
+	}
+
+	themeName := args[0]
+	info, err := sh.ThemeManager.GetThemeInfo(themeName)
+	if err != nil {
+		return "", fmt.Errorf("Failed to get theme info: %v", err)
+	}
+
+	result := fmt.Sprintf("🎨 Theme Information: %s\n", sh.ThemeManager.Colorize("primary", info["name"].(string)))
+	result += fmt.Sprintf("Description: %s\n", info["description"])
+	result += fmt.Sprintf("Dark Mode: %t\n", info["is_dark"])
+	result += fmt.Sprintf("Current Theme: %t\n", info["is_current"])
+
+	return result, nil
+}
+
+// exportTheme exports a theme configuration
+func (sh *SystemHooks) exportTheme(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Theme name required for export")
+	}
+
+	themeName := args[0]
+	export, err := sh.ThemeManager.ExportTheme(themeName)
+	if err != nil {
+		return "", fmt.Errorf("Failed to export theme: %v", err)
+	}
+
+	return export, nil
+}
+
+// demonstrateThemes demonstrates all available themes
+func (sh *SystemHooks) demonstrateThemes() (string, error) {
+	fmt.Println("🎨 Theme Demonstration - Showcasing all available themes")
+
+	themes := sh.ThemeManager.GetAvailableThemes()
+	currentTheme := sh.ThemeManager.GetCurrentTheme()
+
+	for _, themeName := range themes {
+		fmt.Printf("\n🎨 Theme: %s\n", themeName)
+
+		// Temporarily set theme for demonstration
+		originalTheme := sh.ThemeManager.GetCurrentTheme()
+		err := sh.ThemeManager.SetTheme(themeName)
+		if err != nil {
+			continue
+		}
+
+		// Show color samples
+		fmt.Printf("  Primary: %s\n", sh.ThemeManager.Colorize("primary", "████"))
+		fmt.Printf("  Success: %s\n", sh.ThemeManager.Colorize("success", "████"))
+		fmt.Printf("  Warning: %s\n", sh.ThemeManager.Colorize("warning", "████"))
+		fmt.Printf("  Error: %s\n", sh.ThemeManager.Colorize("error", "████"))
+		fmt.Printf("  Info: %s\n", sh.ThemeManager.Colorize("info", "████"))
+		fmt.Printf("  Accent: %s\n", sh.ThemeManager.Colorize("accent", "████"))
+
+		// Restore original theme
+		sh.ThemeManager.SetTheme(originalTheme)
+	}
+
+	// Restore current theme
+	sh.ThemeManager.SetTheme(currentTheme)
+
+	return "Theme demonstration completed! ✨", nil
+}
+
+// toggleTheme toggles between light and dark themes
+func (sh *SystemHooks) toggleTheme() (string, error) {
+	currentTheme := sh.ThemeManager.GetCurrentTheme()
+	currentScheme := sh.ThemeManager.GetCurrentColorScheme()
+
+	var newTheme string
+	if currentScheme.IsDark {
+		// Switch to light theme
+		if currentTheme == "dark" {
+			newTheme = "default"
+		} else if currentTheme == "solarized-dark" {
+			newTheme = "solarized-light"
+		} else {
+			newTheme = "default"
+		}
+	} else {
+		// Switch to dark theme
+		if currentTheme == "default" {
+			newTheme = "dark"
+		} else if currentTheme == "solarized-light" {
+			newTheme = "solarized-dark"
+		} else {
+			newTheme = "dark"
+		}
+	}
+
+	err := sh.ThemeManager.SetTheme(newTheme)
+	if err != nil {
+		return "", fmt.Errorf("Failed to toggle theme: %v", err)
+	}
+
+	newScheme := sh.ThemeManager.GetCurrentColorScheme()
+	mode := "Light"
+	if newScheme.IsDark {
+		mode = sh.ThemeManager.Colorize("info", "Dark")
+	} else {
+		mode = sh.ThemeManager.Colorize("warning", "Light")
+	}
+
+	return fmt.Sprintf("Theme toggled to %s (%s mode) ✨",
+		sh.ThemeManager.Colorize("primary", newTheme), mode), nil
 }
 
 // HandleFileDeletion handles file deletion with safety checks

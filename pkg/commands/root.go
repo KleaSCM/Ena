@@ -81,6 +81,12 @@ func GetHelpEntries() []HelpEntry {
 		{"👀 File Watching", "watch remove <path>", "Remove path dynamically from running watcher"},
 		{"👀 File Watching", "watch metrics", "Show detailed performance metrics"},
 		{"👀 File Watching", "watch reload", "Reload configuration without restart"},
+		{"🎨 Theme Management", "theme list", "List all available themes"},
+		{"🎨 Theme Management", "theme current", "Show current theme information"},
+		{"🎨 Theme Management", "theme set <name>", "Set active theme"},
+		{"🎨 Theme Management", "theme preview <name>", "Preview theme with color samples"},
+		{"🎨 Theme Management", "theme toggle", "Toggle between light and dark modes"},
+		{"🎨 Theme Management", "theme demo", "Demonstrate all themes"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -122,6 +128,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupMultiCommands(rootCmd, assistant)
 	setupPauseCommands(rootCmd, assistant)
 	setupWatchCommands(rootCmd, assistant)
+	setupThemeCommands(rootCmd, assistant)
 
 	return rootCmd
 }
