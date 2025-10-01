@@ -134,6 +134,12 @@ func GetHelpEntries() []HelpEntry {
 		{"💾 Backup Operations", "delete-backup <id>", "Delete a backup and its files"},
 		{"💾 Backup Operations", "backup-stats", "Show backup system statistics"},
 		{"💾 Backup Operations", "backup-cleanup", "Clean up expired backups"},
+		{"📱 App Detection", "scan-apps", "Scan for installed applications"},
+		{"📱 App Detection", "list-apps", "List detected applications with filters"},
+		{"📱 App Detection", "app-info <id>", "Show detailed application information"},
+		{"📱 App Detection", "app-stats", "Show application detection statistics"},
+		{"📱 App Detection", "running-apps", "Show currently running applications"},
+		{"📱 App Detection", "default-apps", "Show default applications for file types"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -183,6 +189,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupOrganizerCommands(rootCmd)
 	setupPatternCommands(rootCmd)
 	setupBackupCommands(rootCmd)
+	setupAppDetectionCommands(rootCmd)
 
 	return rootCmd
 }

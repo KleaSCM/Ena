@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"ena/internal/appdetect"
 	"ena/internal/backup"
 	"ena/internal/batch"
 	"ena/internal/browser"
@@ -78,6 +79,7 @@ type SystemHooks struct {
 	FileOrganizer       *organizer.FileOrganizer
 	PatternEngine       *patterns.PatternEngine
 	BackupEngine        *backup.BackupEngine
+	AppScanner          *appdetect.AppScanner
 }
 
 // Global theme manager instance for persistence
@@ -104,6 +106,9 @@ var globalPatternEngine *patterns.PatternEngine
 // Global backup engine instance for persistence
 var globalBackupEngine *backup.BackupEngine
 
+// Global app scanner instance for persistence
+var globalAppScanner *appdetect.AppScanner
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
@@ -119,6 +124,7 @@ func NewSystemHooks() *SystemHooks {
 		FileOrganizer:       getGlobalFileOrganizer(),
 		PatternEngine:       getGlobalPatternEngine(),
 		BackupEngine:        getGlobalBackupEngine(),
+		AppScanner:          getGlobalAppScanner(),
 	}
 }
 
@@ -185,6 +191,14 @@ func getGlobalBackupEngine() *backup.BackupEngine {
 		globalBackupEngine = backup.NewBackupEngine(getGlobalAnalytics())
 	}
 	return globalBackupEngine
+}
+
+// getGlobalAppScanner returns the global app scanner instance
+func getGlobalAppScanner() *appdetect.AppScanner {
+	if globalAppScanner == nil {
+		globalAppScanner = appdetect.NewAppScanner(getGlobalAnalytics())
+	}
+	return globalAppScanner
 }
 
 // HandleFileOperation processes file-related commands
@@ -2506,5 +2520,97 @@ func (sh *SystemHooks) HandleBackupOperation(args []string) (string, error) {
 
 	default:
 		return "", fmt.Errorf("Unknown backup operation: %s", operation)
+	}
+}
+
+// HandleAppDetectionOperation processes app detection-related commands
+func (sh *SystemHooks) HandleAppDetectionOperation(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("App detection operation requires arguments")
+	}
+
+	operation := args[0]
+	switch operation {
+	case "scan":
+		deepScan := len(args) > 1 && args[1] == "--deep"
+
+		result, err := sh.AppScanner.ScanForApps(deepScan)
+		if err != nil {
+			return "", fmt.Errorf("Failed to scan applications: %v", err)
+		}
+
+		output := fmt.Sprintf("✅ Scan completed in %s!\n", result.ScanDuration.String())
+		output += fmt.Sprintf("📊 Found %d applications\n", result.AppsFound)
+		output += fmt.Sprintf("🔄 Updated %d applications\n", result.AppsUpdated)
+		output += fmt.Sprintf("🗑️  Removed %d applications\n", result.AppsRemoved)
+		output += fmt.Sprintf("🏷️  Categories found: %d\n", len(result.CategoriesFound))
+
+		if len(result.Errors) > 0 {
+			output += fmt.Sprintf("⚠️  Errors encountered: %d\n", len(result.Errors))
+		}
+
+		return output, nil
+
+	case "list":
+		apps := sh.AppScanner.GetApps(map[string]interface{}{})
+		if len(apps) == 0 {
+			return "🌸 No applications detected. Run 'apps scan' first.", nil
+		}
+
+		output := fmt.Sprintf("🌸 Found %d applications (╹◡╹)♡\n", len(apps))
+		output += "===============================\n"
+
+		// Show first 10 apps
+		limit := 10
+		if len(apps) < limit {
+			limit = len(apps)
+		}
+
+		for i := 0; i < limit; i++ {
+			app := apps[i]
+			output += fmt.Sprintf("%d. %s (%s)\n", i+1, app.DisplayName, app.Category)
+			if app.Status == appdetect.StatusRunning {
+				output += "   🟢 Running\n"
+			}
+		}
+
+		if len(apps) > 10 {
+			output += fmt.Sprintf("... and %d more applications\n", len(apps)-10)
+		}
+
+		return output, nil
+
+	case "stats":
+		stats := sh.AppScanner.GetAppStats()
+		output := "🌸 Application Detection Statistics (╹◡╹)♡\n"
+		output += "=========================================\n"
+		output += fmt.Sprintf("📊 Total Applications: %v\n", stats["total_apps"])
+		output += fmt.Sprintf("🟢 Running Applications: %v\n", stats["running_apps"])
+		output += fmt.Sprintf("⭐ Default Applications: %v\n", stats["default_apps"])
+		output += fmt.Sprintf("🖥️  Platform: %s\n", stats["platform"])
+
+		if lastScan, ok := stats["last_scan"].(time.Time); ok && !lastScan.IsZero() {
+			output += fmt.Sprintf("🔄 Last Scan: %s\n", lastScan.Format("2006-01-02 15:04:05"))
+		}
+
+		return output, nil
+
+	case "running":
+		apps := sh.AppScanner.GetRunningApps()
+		if len(apps) == 0 {
+			return "🌸 No running applications detected", nil
+		}
+
+		output := fmt.Sprintf("🌸 Running Applications (╹◡╹)♡\n")
+		output += "===============================\n"
+
+		for i, app := range apps {
+			output += fmt.Sprintf("%d. %s (%s)\n", i+1, app.DisplayName, app.Category)
+		}
+
+		return output, nil
+
+	default:
+		return "", fmt.Errorf("Unknown app detection operation: %s", operation)
 	}
 }
