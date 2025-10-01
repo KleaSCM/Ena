@@ -1,0 +1,21 @@
+{
+  "operation_id": "temp_1759335383456164852",
+  "files_matched": 0,
+  "files_processed": 0,
+  "files_skipped": 0,
+  "files_failed": 0,
+  "errors": [
+    "error collecting files from ~/Documents: stat ~/Documents: no such file or directory",
+    "error collecting files from ~/Downloads: stat ~/Downloads: no such file or directory"
+  ],
+  "duration": 12233,
+  "details": null,
+  "summary": {
+    "total_size": 0,
+    "average_size": 0,
+    "oldest_file": "",
+    "newest_file": "",
+    "file_types": {},
+    "size_distribution": {}
+  }
+}

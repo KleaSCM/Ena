@@ -122,6 +122,12 @@ func GetHelpEntries() []HelpEntry {
 		{"🗂️ Smart Organization", "file-type <path>", "Get file type information"},
 		{"🗂️ Smart Organization", "start-watching", "Start real-time file organization"},
 		{"🗂️ Smart Organization", "stop-watching", "Stop real-time file organization"},
+		{"🔍 Pattern Operations", "find <pattern> [paths...]", "Find files matching pattern criteria"},
+		{"🔍 Pattern Operations", "create-operation <name>", "Create new pattern operation"},
+		{"🔍 Pattern Operations", "list-operations", "List all pattern operations"},
+		{"🔍 Pattern Operations", "execute-operation <id>", "Execute specific pattern operation"},
+		{"🔍 Pattern Operations", "execute-all", "Execute all enabled pattern operations"},
+		{"🔍 Pattern Operations", "remove-operation <id>", "Remove pattern operation"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -169,6 +175,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupBatchCommands(rootCmd)
 	setupUndoCommands(rootCmd)
 	setupOrganizerCommands(rootCmd)
+	setupPatternCommands(rootCmd)
 
 	return rootCmd
 }

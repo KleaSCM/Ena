@@ -1,0 +1,18 @@
+{
+  "operation_id": "temp_1759335456967602532",
+  "files_matched": 0,
+  "files_processed": 0,
+  "files_skipped": 0,
+  "files_failed": 0,
+  "errors": null,
+  "duration": 1971926,
+  "details": null,
+  "summary": {
+    "total_size": 0,
+    "average_size": 0,
+    "oldest_file": "",
+    "newest_file": "",
+    "file_types": {},
+    "size_distribution": {}
+  }
+}

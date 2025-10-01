@@ -25,6 +25,7 @@ import (
 	"ena/internal/browser"
 	"ena/internal/notifications"
 	"ena/internal/organizer"
+	"ena/internal/patterns"
 	"ena/internal/progress"
 	"ena/internal/suggestions"
 	"ena/internal/theme"
@@ -74,6 +75,7 @@ type SystemHooks struct {
 	BatchManager        *batch.BatchManager
 	UndoManager         *undo.UndoManager
 	FileOrganizer       *organizer.FileOrganizer
+	PatternEngine       *patterns.PatternEngine
 }
 
 // Global theme manager instance for persistence
@@ -94,6 +96,9 @@ var globalUndoManager *undo.UndoManager
 // Global file organizer instance for persistence
 var globalFileOrganizer *organizer.FileOrganizer
 
+// Global pattern engine instance for persistence
+var globalPatternEngine *patterns.PatternEngine
+
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
 	// Initialize all system operation handlers
@@ -107,6 +112,7 @@ func NewSystemHooks() *SystemHooks {
 		BatchManager:        getGlobalBatchManager(),
 		UndoManager:         getGlobalUndoManager(),
 		FileOrganizer:       getGlobalFileOrganizer(),
+		PatternEngine:       getGlobalPatternEngine(),
 	}
 }
 
@@ -157,6 +163,14 @@ func getGlobalFileOrganizer() *organizer.FileOrganizer {
 		globalFileOrganizer = organizer.NewFileOrganizer(getGlobalAnalytics())
 	}
 	return globalFileOrganizer
+}
+
+// getGlobalPatternEngine returns the global pattern engine instance
+func getGlobalPatternEngine() *patterns.PatternEngine {
+	if globalPatternEngine == nil {
+		globalPatternEngine = patterns.NewPatternEngine(getGlobalAnalytics())
+	}
+	return globalPatternEngine
 }
 
 // HandleFileOperation processes file-related commands
@@ -2265,6 +2279,104 @@ func (sh *SystemHooks) HandleOptimizeOperation(args []string) (string, error) {
 	}
 
 	return result, nil
+}
+
+// HandlePatternOperation processes pattern-based operation commands
+func (sh *SystemHooks) HandlePatternOperation(args []string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("Pattern operation requires arguments")
+	}
+
+	operation := args[0]
+	switch operation {
+	case "find":
+		if len(args) < 2 {
+			return "", fmt.Errorf("Find requires pattern and paths")
+		}
+		pattern := args[1]
+		var paths []string
+		if len(args) > 2 {
+			paths = args[2:]
+		} else {
+			paths = []string{"."}
+		}
+
+		// Create temporary operation for search
+		tempOp := sh.PatternEngine.CreateSampleOperation()
+		tempOp.Description = pattern
+		tempOp.Paths = paths
+
+		result, err := sh.PatternEngine.ExecuteOperation(tempOp.ID, true) // dry run
+		if err != nil {
+			return "", fmt.Errorf("Failed to execute pattern search: %v", err)
+		}
+
+		if result.FilesMatched == 0 {
+			return "🌸 No files matched the pattern", nil
+		}
+
+		output := fmt.Sprintf("🌸 Found %d files matching pattern: %s\n", result.FilesMatched, pattern)
+		output += "===============================\n"
+		for i, detail := range result.Details {
+			if i >= 10 { // Limit to first 10 results
+				output += fmt.Sprintf("... and %d more files\n", result.FilesMatched-10)
+				break
+			}
+			output += fmt.Sprintf("%d. %s (%s)\n", i+1, detail.FilePath, formatFileSize(detail.Size))
+		}
+		return output, nil
+
+	case "list":
+		operations := sh.PatternEngine.GetOperations()
+		if len(operations) == 0 {
+			return "🌸 No pattern operations configured", nil
+		}
+
+		output := "🌸 Pattern Operations (╹◡╹)♡\n"
+		output += "===============================\n"
+		for i, op := range operations {
+			status := "❌ Disabled"
+			if op.Enabled {
+				status = "✅ Enabled"
+			}
+			output += fmt.Sprintf("%d. %s (%s)\n", i+1, op.Name, status)
+			output += fmt.Sprintf("   📝 %s\n", op.Description)
+			output += fmt.Sprintf("   🆔 %s\n", op.ID)
+		}
+		return output, nil
+
+	case "create":
+		if len(args) < 2 {
+			return "", fmt.Errorf("Create requires operation name")
+		}
+		name := args[1]
+
+		operation := sh.PatternEngine.CreateSampleOperation()
+		operation.Name = name
+
+		err := sh.PatternEngine.AddOperation(operation)
+		if err != nil {
+			return "", fmt.Errorf("Failed to create operation: %v", err)
+		}
+		return fmt.Sprintf("✅ Successfully created pattern operation: %s", name), nil
+
+	default:
+		return "", fmt.Errorf("Unknown pattern operation: %s", operation)
+	}
+}
+
+// Helper function to format file size
+func formatFileSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // Helper function to check if slice contains string
