@@ -12,14 +12,12 @@
 
 ## 🧠 Intelligence & Automation
 - [x] **Smart suggestions** based on usage patterns ✅
-- [ ] **Command aliases** (e.g., "ls" → "terminal execute ls -la")
 - [x] **Batch operations** (delete multiple files, copy folders recursively) ✅
 - [x] **Undo functionality** for file operations ✅
 - [x] **Smart file organization** (auto-sort downloads, organize by type) ✅
 - [x] **Pattern-based operations** (find all .txt files older than 30 days) ✅
 - [x] **Automated backups** before destructive operations ✅
 - [x] **Smart app detection** (auto-detect installed applications) ✅
-- [ ] **System optimization suggestions** (cleanup temp files, etc.)
 
 ## 🛠️ Development Assistant Features
 - [ ] **Code compilation** and building (go build, make, etc.)
@@ -162,7 +160,9 @@
 - [ ] **Documentation** generation (auto-docs)
 - [ ] **Internationalization** (i18n support)
 
-
+----------------------------------------------------------------------
+- [ ] **System optimization suggestions** (cleanup temp files, etc.)
+- [ ] **Command aliases** (e.g., "ls" → "terminal execute ls -la")
 ----------------------------------------------------------------------
 
 
