@@ -99,6 +99,11 @@ func GetHelpEntries() []HelpEntry {
 		{"🔔 Desktop Notifications", "notify status", "Show notification system status"},
 		{"🔔 Desktop Notifications", "notify history", "Show notification history"},
 		{"🔔 Desktop Notifications", "notify demo", "Demonstrate all notification types"},
+		{"🧠 Smart Suggestions", "suggest", "Get intelligent suggestions based on usage patterns"},
+		{"🧠 Smart Suggestions", "stats", "Show usage statistics and analytics"},
+		{"🧠 Smart Suggestions", "feedback <id> <type>", "Provide feedback on suggestions"},
+		{"🧠 Smart Suggestions", "workflow", "Show workflow optimization suggestions"},
+		{"🧠 Smart Suggestions", "optimize", "Show system optimization suggestions"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -142,6 +147,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupWatchCommands(rootCmd, assistant)
 	setupThemeCommands(rootCmd, assistant)
 	setupNotificationCommands(rootCmd, assistant)
+	setupSuggestionsCommands(rootCmd)
 
 	return rootCmd
 }

@@ -24,6 +24,7 @@ import (
 	"ena/internal/browser"
 	"ena/internal/notifications"
 	"ena/internal/progress"
+	"ena/internal/suggestions"
 	"ena/internal/theme"
 	"ena/internal/watcher"
 	"ena/pkg/system"
@@ -66,6 +67,7 @@ type SystemHooks struct {
 	FileWatcher         *watcher.FileWatcher
 	ThemeManager        *theme.ThemeManager
 	NotificationManager *notifications.NotificationManager
+	UsageAnalytics      *suggestions.UsageAnalytics
 }
 
 // Global theme manager instance for persistence
@@ -73,6 +75,9 @@ var globalThemeManager *theme.ThemeManager
 
 // Global notification manager instance for persistence
 var globalNotificationManager *notifications.NotificationManager
+
+// Global analytics instance for persistence
+var globalAnalytics *suggestions.UsageAnalytics
 
 // NewSystemHooks creates a new instance of system hooks
 func NewSystemHooks() *SystemHooks {
@@ -83,6 +88,7 @@ func NewSystemHooks() *SystemHooks {
 		AppManager:          system.NewAppManager(),
 		ThemeManager:        getGlobalThemeManager(),
 		NotificationManager: getGlobalNotificationManager(),
+		UsageAnalytics:      getGlobalAnalytics(),
 	}
 }
 
@@ -101,6 +107,14 @@ func getGlobalNotificationManager() *notifications.NotificationManager {
 		globalNotificationManager.StartCleanupRoutine() // Start background cleanup
 	}
 	return globalNotificationManager
+}
+
+// getGlobalAnalytics returns the global analytics instance
+func getGlobalAnalytics() *suggestions.UsageAnalytics {
+	if globalAnalytics == nil {
+		globalAnalytics = suggestions.NewUsageAnalytics()
+	}
+	return globalAnalytics
 }
 
 // HandleFileOperation processes file-related commands
@@ -2020,4 +2034,171 @@ func (sh *SystemHooks) demonstrateNotifications() (string, error) {
 	}
 
 	return "Notification demonstration completed! ✨", nil
+}
+
+// HandleSuggestionOperation handles suggestion-related commands
+func (sh *SystemHooks) HandleSuggestionOperation(args []string) (string, error) {
+	if err := requireArgs(args, 0, "Suggestion operation"); err != nil {
+		return "", err
+	}
+
+	// Get suggestions with default limit
+	suggestions := sh.UsageAnalytics.GetSuggestions(10)
+
+	if len(suggestions) == 0 {
+		return "🌸 No suggestions available right now. Keep using Ena and I'll learn your patterns! (╹◡╹)♡", nil
+	}
+
+	result := "🌸 Here are my smart suggestions for you! (╹◡╹)♡\n\n"
+
+	for i, suggestion := range suggestions {
+		result += fmt.Sprintf("%d. %s\n", i+1, suggestion.Title)
+		result += fmt.Sprintf("   %s\n", suggestion.Description)
+		if suggestion.Command != "" {
+			result += fmt.Sprintf("   💡 Try: %s\n", suggestion.Command)
+		}
+		result += fmt.Sprintf("   📊 Confidence: %.0f%% | Priority: %d/10 | Category: %s\n",
+			suggestion.Confidence*100, suggestion.Priority, suggestion.Category)
+		result += "\n"
+	}
+
+	return result, nil
+}
+
+// HandleStatsOperation handles statistics-related commands
+func (sh *SystemHooks) HandleStatsOperation(args []string) (string, error) {
+	if err := requireArgs(args, 0, "Stats operation"); err != nil {
+		return "", err
+	}
+
+	stats := sh.UsageAnalytics.GetUsageStats()
+
+	result := "🌸 Ena's Analytics Dashboard (╹◡╹)♡\n"
+	result += "=====================================\n"
+	result += fmt.Sprintf("📊 Total Commands Executed: %v\n", stats["total_commands"])
+	result += fmt.Sprintf("📁 Total File Operations: %v\n", stats["total_file_operations"])
+	result += fmt.Sprintf("⏱️  Average Command Duration: %v\n", stats["average_command_duration"])
+	result += fmt.Sprintf("✅ Success Rate: %.1f%%\n", stats["success_rate"])
+	result += fmt.Sprintf("💾 Total File Size Processed: %v\n", stats["total_file_size_processed"])
+	result += fmt.Sprintf("🔍 Patterns Discovered: %v\n", stats["patterns_discovered"])
+	result += fmt.Sprintf("💡 Suggestions Generated: %v\n", stats["suggestions_generated"])
+	result += fmt.Sprintf("📅 Analysis Period: %v\n", stats["analysis_period"])
+	result += "\n"
+
+	// Most used commands
+	if mostUsed, ok := stats["most_used_commands"].([]map[string]interface{}); ok {
+		result += "🔥 Most Used Commands:\n"
+		for i, cmd := range mostUsed {
+			if i >= 5 {
+				break
+			}
+			result += fmt.Sprintf("   %d. %s (%v times)\n", i+1, cmd["name"], cmd["count"])
+		}
+		result += "\n"
+	}
+
+	// Most common file operations
+	if mostFileOps, ok := stats["most_common_file_operations"].([]map[string]interface{}); ok {
+		result += "📁 Most Common File Operations:\n"
+		for i, op := range mostFileOps {
+			if i >= 5 {
+				break
+			}
+			result += fmt.Sprintf("   %d. %s (%v times)\n", i+1, op["name"], op["count"])
+		}
+		result += "\n"
+	}
+
+	return result, nil
+}
+
+// HandleFeedbackOperation handles feedback-related commands
+func (sh *SystemHooks) HandleFeedbackOperation(args []string) (string, error) {
+	if err := requireArgs(args, 2, "Feedback operation"); err != nil {
+		return "", err
+	}
+
+	suggestionID := args[0]
+	feedback := args[1]
+
+	// Validate feedback
+	validFeedback := []string{"helpful", "not_helpful", "dismiss"}
+	if !contains(validFeedback, feedback) {
+		return "", fmt.Errorf("Invalid feedback. Must be one of: %s", strings.Join(validFeedback, ", "))
+	}
+
+	err := sh.UsageAnalytics.ProvideFeedback(suggestionID, feedback)
+	if err != nil {
+		return "", fmt.Errorf("Error providing feedback: %v", err)
+	}
+
+	return "🌸 Thank you for the feedback! I'll use this to improve my suggestions. (╹◡╹)♡", nil
+}
+
+// HandleWorkflowOperation handles workflow-related commands
+func (sh *SystemHooks) HandleWorkflowOperation(args []string) (string, error) {
+	if err := requireArgs(args, 0, "Workflow operation"); err != nil {
+		return "", err
+	}
+
+	suggestions := sh.UsageAnalytics.GetWorkflowSuggestions()
+
+	if len(suggestions) == 0 {
+		return "🌸 No workflow patterns detected yet. Keep using Ena and I'll discover your workflows!", nil
+	}
+
+	result := "🌸 Workflow Optimization Suggestions (╹◡╹)♡\n"
+	result += "==========================================\n"
+
+	for i, suggestion := range suggestions {
+		result += fmt.Sprintf("%d. %s\n", i+1, suggestion.Title)
+		result += fmt.Sprintf("   %s\n", suggestion.Description)
+		if suggestion.Command != "" {
+			result += fmt.Sprintf("   💡 Command: %s\n", suggestion.Command)
+		}
+		result += fmt.Sprintf("   📊 Confidence: %.0f%% | Priority: %d/10\n",
+			suggestion.Confidence*100, suggestion.Priority)
+		result += "\n"
+	}
+
+	return result, nil
+}
+
+// HandleOptimizeOperation handles optimization-related commands
+func (sh *SystemHooks) HandleOptimizeOperation(args []string) (string, error) {
+	if err := requireArgs(args, 0, "Optimize operation"); err != nil {
+		return "", err
+	}
+
+	suggestions := sh.UsageAnalytics.GetOptimizationSuggestions()
+
+	if len(suggestions) == 0 {
+		return "🌸 Your system is already optimized! Great job! (╹◡╹)♡", nil
+	}
+
+	result := "🌸 System Optimization Suggestions (╹◡╹)♡\n"
+	result += "=======================================\n"
+
+	for i, suggestion := range suggestions {
+		result += fmt.Sprintf("%d. %s\n", i+1, suggestion.Title)
+		result += fmt.Sprintf("   %s\n", suggestion.Description)
+		if suggestion.Command != "" {
+			result += fmt.Sprintf("   💡 Command: %s\n", suggestion.Command)
+		}
+		result += fmt.Sprintf("   📊 Confidence: %.0f%% | Priority: %d/10\n",
+			suggestion.Confidence*100, suggestion.Priority)
+		result += "\n"
+	}
+
+	return result, nil
+}
+
+// Helper function to check if slice contains string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

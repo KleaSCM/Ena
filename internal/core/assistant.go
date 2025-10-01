@@ -103,6 +103,16 @@ func (a *Assistant) ProcessCommand(command string, args []string) (string, error
 		return a.SystemHooks.HandleThemeOperation(args)
 	case "notify":
 		return a.SystemHooks.HandleNotificationOperation(args)
+	case "suggest":
+		return a.SystemHooks.HandleSuggestionOperation(args)
+	case "stats":
+		return a.SystemHooks.HandleStatsOperation(args)
+	case "feedback":
+		return a.SystemHooks.HandleFeedbackOperation(args)
+	case "workflow":
+		return a.SystemHooks.HandleWorkflowOperation(args)
+	case "optimize":
+		return a.SystemHooks.HandleOptimizeOperation(args)
 	default:
 		return "", fmt.Errorf("Unknown command: \"%s\" - I don't understand that! 😅", command)
 	}

@@ -11,7 +11,7 @@
 - [x] **Desktop notifications** for completed tasks ✅
 
 ## 🧠 Intelligence & Automation
-- [ ] **Smart suggestions** based on usage patterns
+- [x] **Smart suggestions** based on usage patterns ✅
 - [ ] **Command aliases** (e.g., "ls" → "terminal execute ls -la")
 - [ ] **Batch operations** (delete multiple files, copy folders recursively)
 - [ ] **Undo functionality** for file operations
