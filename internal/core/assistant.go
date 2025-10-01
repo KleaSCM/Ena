@@ -97,6 +97,8 @@ func (a *Assistant) ProcessCommand(command string, args []string) (string, error
 		return a.SystemHooks.HandleMultiProgress(args)
 	case "pause":
 		return a.SystemHooks.HandlePauseResume(args)
+	case "watch":
+		return a.SystemHooks.HandleFileWatching(args)
 	default:
 		return "", fmt.Errorf("Unknown command: \"%s\" - I don't understand that! 😅", command)
 	}

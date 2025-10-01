@@ -16,12 +16,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
 	"ena/internal/browser"
 	"ena/internal/progress"
+	"ena/internal/watcher"
 	"ena/pkg/system"
 )
 
@@ -59,6 +61,7 @@ type SystemHooks struct {
 	FileManager     *system.FileManager
 	TerminalManager *system.TerminalManager
 	AppManager      *system.AppManager
+	FileWatcher     *watcher.FileWatcher
 }
 
 // NewSystemHooks creates a new instance of system hooks
@@ -606,6 +609,615 @@ func (sh *SystemHooks) testHttpDownload() (string, error) {
 	os.Remove(testFile)
 
 	return "Real HTTP download demo completed! ✨", nil
+}
+
+// HandleFileWatching handles file watching operations
+func (sh *SystemHooks) HandleFileWatching(args []string) (string, error) {
+	if err := requireArgs(args, 1, "File watching"); err != nil {
+		return "", err
+	}
+
+	operation := args[0]
+
+	switch operation {
+	case "start":
+		// Start file watching
+		return sh.startFileWatching(args[1:])
+	case "stop":
+		// Stop file watching
+		return sh.stopFileWatching()
+	case "status":
+		// Show file watching status
+		return sh.getFileWatchingStatus()
+	case "demo":
+		// Demonstrate file watching
+		return sh.demonstrateFileWatching()
+	case "debug":
+		// Test debug mode with enhanced logging
+		return sh.testDebugMode()
+	case "advanced":
+		// Test advanced features
+		return sh.testAdvancedFeatures()
+	case "add":
+		// Add path dynamically
+		return sh.addPathDynamic(args[1:])
+	case "remove":
+		// Remove path dynamically
+		return sh.removePathDynamic(args[1:])
+	case "metrics":
+		// Show detailed metrics
+		return sh.showMetrics()
+	case "reload":
+		// Reload configuration
+		return sh.reloadConfig()
+	default:
+		return "", fmt.Errorf("Unknown file watching operation: %s", operation)
+	}
+}
+
+// startFileWatching starts monitoring specified paths
+func (sh *SystemHooks) startFileWatching(paths []string) (string, error) {
+	if len(paths) == 0 {
+		// Default to current directory
+		paths = []string{"."}
+	}
+
+	// Create file watcher configuration
+	config := &watcher.WatchConfig{
+		Paths:            paths,
+		Recursive:        true,
+		IncludeHidden:    false,
+		DebounceTime:     100 * time.Millisecond,
+		EventCallbacks:   make(map[watcher.EventType][]watcher.EventCallback),
+		DebugMode:        false,
+		LogIgnoredEvents: false,
+	}
+
+	// Add event callbacks
+	config.EventCallbacks[watcher.EventCreate] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("📁 Created: %s\n", event.Path)
+		},
+	}
+	config.EventCallbacks[watcher.EventModify] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("✏️ Modified: %s\n", event.Path)
+		},
+	}
+	config.EventCallbacks[watcher.EventDelete] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🗑️ Deleted: %s\n", event.Path)
+		},
+	}
+
+	// Create and start file watcher
+	fileWatcher, err := watcher.NewFileWatcher(config)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create file watcher: %v", err)
+	}
+
+	// Add paths to watcher
+	for _, path := range paths {
+		err = fileWatcher.AddPath(path)
+		if err != nil {
+			return "", fmt.Errorf("Failed to add path %s: %v", path, err)
+		}
+	}
+
+	// Start watching
+	err = fileWatcher.Start()
+	if err != nil {
+		return "", fmt.Errorf("Failed to start file watcher: %v", err)
+	}
+
+	// Store watcher instance
+	sh.FileWatcher = fileWatcher
+
+	return fmt.Sprintf("Started watching %d path(s): %s ✨", len(paths), strings.Join(paths, ", ")), nil
+}
+
+// stopFileWatching stops the file watcher
+func (sh *SystemHooks) stopFileWatching() (string, error) {
+	if sh.FileWatcher == nil {
+		return "No file watcher is currently running", nil
+	}
+
+	err := sh.FileWatcher.Stop()
+	if err != nil {
+		return "", fmt.Errorf("Failed to stop file watcher: %v", err)
+	}
+
+	sh.FileWatcher = nil
+	return "File watcher stopped ✨", nil
+}
+
+// getFileWatchingStatus returns the current status of file watching
+func (sh *SystemHooks) getFileWatchingStatus() (string, error) {
+	if sh.FileWatcher == nil {
+		return "File watcher is not running", nil
+	}
+
+	stats := sh.FileWatcher.GetStats()
+	paths := sh.FileWatcher.GetWatchedPaths()
+
+	result := fmt.Sprintf("File Watcher Status:\n")
+	result += fmt.Sprintf("  Running: %t\n", stats["running"])
+	result += fmt.Sprintf("  Watched Paths: %d\n", stats["watched_paths"])
+	result += fmt.Sprintf("  Callbacks: %d\n", stats["callbacks"])
+	result += fmt.Sprintf("  Recursive: %t\n", stats["recursive"])
+	result += fmt.Sprintf("  Include Hidden: %t\n", stats["include_hidden"])
+
+	if len(paths) > 0 {
+		result += fmt.Sprintf("  Paths:\n")
+		for _, path := range paths {
+			result += fmt.Sprintf("    - %s\n", path)
+		}
+	}
+
+	return result, nil
+}
+
+// demonstrateFileWatching demonstrates file watching functionality
+func (sh *SystemHooks) demonstrateFileWatching() (string, error) {
+	fmt.Println("👀 File Watching Demo - Watch for file changes in /tmp")
+
+	// Create demo directory
+	demoDir := "/tmp/ena_watch_demo"
+	err := os.MkdirAll(demoDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create demo directory: %v", err)
+	}
+
+	// Create file watcher configuration
+	config := &watcher.WatchConfig{
+		Paths:            []string{demoDir},
+		Recursive:        true,
+		IncludeHidden:    false,
+		DebounceTime:     50 * time.Millisecond,
+		EventCallbacks:   make(map[watcher.EventType][]watcher.EventCallback),
+		DebugMode:        true,
+		LogIgnoredEvents: true,
+	}
+
+	// Add colorful event callbacks
+	config.EventCallbacks[watcher.EventCreate] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			if !event.IsDir {
+				fmt.Printf("📁 Created: %s (%.2f KB)\n", event.Path, float64(event.Size)/1024)
+			}
+		},
+	}
+	config.EventCallbacks[watcher.EventModify] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			if !event.IsDir {
+				fmt.Printf("✏️ Modified: %s (%.2f KB)\n", event.Path, float64(event.Size)/1024)
+			}
+		},
+	}
+	config.EventCallbacks[watcher.EventDelete] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			if !event.IsDir {
+				fmt.Printf("🗑️ Deleted: %s\n", event.Path)
+			}
+		},
+	}
+
+	// Create and start file watcher
+	fileWatcher, err := watcher.NewFileWatcher(config)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create file watcher: %v", err)
+	}
+
+	err = fileWatcher.AddPath(demoDir)
+	if err != nil {
+		return "", fmt.Errorf("Failed to add demo directory: %v", err)
+	}
+
+	err = fileWatcher.Start()
+	if err != nil {
+		return "", fmt.Errorf("Failed to start file watcher: %v", err)
+	}
+
+	fmt.Println("🎯 Creating test files...")
+
+	// Create some test files
+	testFiles := []string{
+		"test1.txt",
+		"test2.log",
+		"subdir/test3.md",
+	}
+
+	for _, filename := range testFiles {
+		filePath := filepath.Join(demoDir, filename)
+
+		// Create directory if needed
+		dir := filepath.Dir(filePath)
+		if dir != demoDir {
+			os.MkdirAll(dir, 0755)
+		}
+
+		// Create file
+		file, err := os.Create(filePath)
+		if err != nil {
+			continue
+		}
+		file.WriteString(fmt.Sprintf("Test content for %s\n", filename))
+		file.Close()
+
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	fmt.Println("🎯 Modifying files...")
+
+	// Modify files
+	for _, filename := range testFiles {
+		filePath := filepath.Join(demoDir, filename)
+		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			continue
+		}
+		file.WriteString("Additional content\n")
+		file.Close()
+
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	fmt.Println("🎯 Deleting files...")
+
+	// Delete files
+	for _, filename := range testFiles {
+		filePath := filepath.Join(demoDir, filename)
+		os.Remove(filePath)
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	// Stop watcher
+	fileWatcher.Stop()
+
+	// Clean up
+	os.RemoveAll(demoDir)
+
+	return "File watching demo completed! ✨", nil
+}
+
+// testDebugMode tests the enhanced debug features
+func (sh *SystemHooks) testDebugMode() (string, error) {
+	fmt.Println("🔍 Debug Mode Test - Enhanced file watching with detailed logging")
+
+	// Create test directory
+	testDir := "/tmp/ena_debug_test"
+	err := os.MkdirAll(testDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create test directory: %v", err)
+	}
+
+	// Create file watcher configuration with debug enabled
+	config := &watcher.WatchConfig{
+		Paths:            []string{testDir},
+		Recursive:        true,
+		IncludeHidden:    false,
+		DebounceTime:     50 * time.Millisecond,
+		EventCallbacks:   make(map[watcher.EventType][]watcher.EventCallback),
+		DebugMode:        true,
+		LogIgnoredEvents: true,
+		FileExtensions:   []string{".txt", ".log"},
+		ExcludePatterns:  []string{"*.tmp"},
+	}
+
+	// Add debug event callbacks
+	config.EventCallbacks[watcher.EventCreate] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🔍 DEBUG CREATE: %s (size: %d)\n", event.Path, event.Size)
+		},
+	}
+	config.EventCallbacks[watcher.EventModify] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🔍 DEBUG MODIFY: %s (size: %d)\n", event.Path, event.Size)
+		},
+	}
+	config.EventCallbacks[watcher.EventDelete] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🔍 DEBUG DELETE: %s\n", event.Path)
+		},
+	}
+	config.EventCallbacks[watcher.EventMove] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🔍 DEBUG MOVE: %s (size: %d)\n", event.Path, event.Size)
+		},
+	}
+
+	// Create and start file watcher
+	fileWatcher, err := watcher.NewFileWatcher(config)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create file watcher: %v", err)
+	}
+
+	err = fileWatcher.AddPath(testDir)
+	if err != nil {
+		return "", fmt.Errorf("Failed to add test directory: %v", err)
+	}
+
+	err = fileWatcher.Start()
+	if err != nil {
+		return "", fmt.Errorf("Failed to start file watcher: %v", err)
+	}
+
+	fmt.Println("🎯 Testing file extension filtering...")
+
+	// Create files with different extensions
+	testFiles := []string{
+		"allowed.txt",
+		"allowed.log",
+		"ignored.md",
+		"ignored.tmp",
+	}
+
+	for _, filename := range testFiles {
+		filePath := filepath.Join(testDir, filename)
+		file, err := os.Create(filePath)
+		if err != nil {
+			continue
+		}
+		file.WriteString(fmt.Sprintf("Test content for %s\n", filename))
+		file.Close()
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	fmt.Println("🎯 Testing move detection...")
+
+	// Test move operation
+	sourceFile := filepath.Join(testDir, "move_test.txt")
+	destFile := filepath.Join(testDir, "moved_file.txt")
+
+	// Create source file
+	file, err := os.Create(sourceFile)
+	if err == nil {
+		file.WriteString("This file will be moved\n")
+		file.Close()
+		time.Sleep(100 * time.Millisecond)
+
+		// Move file
+		os.Rename(sourceFile, destFile)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	fmt.Println("🎯 Testing debounce functionality...")
+
+	// Rapid modifications to test debounce
+	debounceFile := filepath.Join(testDir, "debounce_test.txt")
+	file, err = os.Create(debounceFile)
+	if err == nil {
+		for i := 0; i < 5; i++ {
+			file.WriteString(fmt.Sprintf("Rapid write %d\n", i))
+			time.Sleep(10 * time.Millisecond) // Very fast writes
+		}
+		file.Close()
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	// Stop watcher
+	fileWatcher.Stop()
+
+	// Clean up
+	os.RemoveAll(testDir)
+
+	return "Debug mode test completed! Check logs for detailed information ✨", nil
+}
+
+// testAdvancedFeatures tests all advanced file watcher features
+func (sh *SystemHooks) testAdvancedFeatures() (string, error) {
+	fmt.Println("🚀 Advanced Features Test - Enterprise-grade file watching capabilities")
+
+	// Create test directory
+	testDir := "/tmp/ena_advanced_test"
+	err := os.MkdirAll(testDir, 0755)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create test directory: %v", err)
+	}
+
+	// Create advanced configuration
+	config := &watcher.WatchConfig{
+		Paths:            []string{testDir},
+		Recursive:        true,
+		IncludeHidden:    false,
+		DebounceTime:     50 * time.Millisecond,
+		EventCallbacks:   make(map[watcher.EventType][]watcher.EventCallback),
+		DebugMode:        true,
+		LogIgnoredEvents: true,
+		BatchEvents:      true,
+		BatchSize:        5,
+		BatchTimeout:     500 * time.Millisecond,
+		EventPriority: map[watcher.EventType]int{
+			watcher.EventDelete: 1,
+			watcher.EventCreate: 2,
+			watcher.EventModify: 3,
+			watcher.EventMove:   4,
+			watcher.EventRename: 5,
+		},
+		MetricsEnabled: true,
+		ErrorRecovery:  true,
+		MaxRetries:     3,
+		RetryDelay:     1 * time.Second,
+	}
+
+	// Add event callbacks with metrics
+	config.EventCallbacks[watcher.EventCreate] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🚀 ADVANCED CREATE: %s (size: %d)\n", event.Path, event.Size)
+		},
+	}
+	config.EventCallbacks[watcher.EventModify] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🚀 ADVANCED MODIFY: %s (size: %d)\n", event.Path, event.Size)
+		},
+	}
+	config.EventCallbacks[watcher.EventDelete] = []watcher.EventCallback{
+		func(event watcher.FileEvent) {
+			fmt.Printf("🚀 ADVANCED DELETE: %s\n", event.Path)
+		},
+	}
+
+	// Create and start enhanced file watcher
+	fileWatcher, err := watcher.NewFileWatcher(config)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create file watcher: %v", err)
+	}
+
+	err = fileWatcher.AddPath(testDir)
+	if err != nil {
+		return "", fmt.Errorf("Failed to add test directory: %v", err)
+	}
+
+	err = fileWatcher.StartEnhanced()
+	if err != nil {
+		return "", fmt.Errorf("Failed to start enhanced watcher: %v", err)
+	}
+
+	fmt.Println("🎯 Testing event batching and prioritization...")
+
+	// Create multiple files rapidly to test batching
+	for i := 0; i < 8; i++ {
+		filename := fmt.Sprintf("batch_test_%d.txt", i)
+		filePath := filepath.Join(testDir, filename)
+		file, err := os.Create(filePath)
+		if err != nil {
+			continue
+		}
+		file.WriteString(fmt.Sprintf("Batch test content %d\n", i))
+		file.Close()
+		time.Sleep(50 * time.Millisecond) // Rapid creation
+	}
+
+	fmt.Println("🎯 Testing dynamic path management...")
+
+	// Create subdirectory and add it dynamically
+	subDir := filepath.Join(testDir, "dynamic_subdir")
+	err = os.MkdirAll(subDir, 0755)
+	if err == nil {
+		err = fileWatcher.AddPathDynamic(subDir)
+		if err != nil {
+			fmt.Printf("Failed to add dynamic path: %v\n", err)
+		} else {
+			fmt.Printf("✅ Dynamically added path: %s\n", subDir)
+		}
+	}
+
+	// Create file in dynamic subdirectory
+	dynamicFile := filepath.Join(subDir, "dynamic_file.txt")
+	file, err := os.Create(dynamicFile)
+	if err == nil {
+		file.WriteString("This file was created in a dynamically added directory\n")
+		file.Close()
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	fmt.Println("🎯 Testing metrics collection...")
+
+	// Show metrics
+	metrics := fileWatcher.GetMetrics()
+	fmt.Printf("📊 Metrics:\n")
+	fmt.Printf("  Events Processed: %d\n", metrics.EventsProcessed)
+	fmt.Printf("  Events Batched: %d\n", metrics.EventsBatched)
+	fmt.Printf("  Paths Watched: %d\n", metrics.PathsWatched)
+	fmt.Printf("  Errors Encountered: %d\n", metrics.ErrorsEncountered)
+	fmt.Printf("  Retries Attempted: %d\n", metrics.RetriesAttempted)
+	fmt.Printf("  Uptime: %v\n", time.Since(metrics.StartTime))
+
+	fmt.Println("🎯 Testing error recovery...")
+
+	// Simulate error by removing a path that doesn't exist
+	err = fileWatcher.RemovePathDynamic("/nonexistent/path")
+	if err != nil {
+		fmt.Printf("✅ Error recovery handled: %v\n", err)
+	}
+
+	// Stop watcher
+	fileWatcher.Stop()
+
+	// Clean up
+	os.RemoveAll(testDir)
+
+	return "Advanced features test completed! ✨", nil
+}
+
+// addPathDynamic adds a path to the running watcher
+func (sh *SystemHooks) addPathDynamic(args []string) (string, error) {
+	if sh.FileWatcher == nil {
+		return "No file watcher is currently running", nil
+	}
+
+	if len(args) == 0 {
+		return "", fmt.Errorf("Path required for dynamic addition")
+	}
+
+	path := args[0]
+	err := sh.FileWatcher.AddPathDynamic(path)
+	if err != nil {
+		return "", fmt.Errorf("Failed to add path dynamically: %v", err)
+	}
+
+	return fmt.Sprintf("Dynamically added path: %s ✨", path), nil
+}
+
+// removePathDynamic removes a path from the running watcher
+func (sh *SystemHooks) removePathDynamic(args []string) (string, error) {
+	if sh.FileWatcher == nil {
+		return "No file watcher is currently running", nil
+	}
+
+	if len(args) == 0 {
+		return "", fmt.Errorf("Path required for dynamic removal")
+	}
+
+	path := args[0]
+	err := sh.FileWatcher.RemovePathDynamic(path)
+	if err != nil {
+		return "", fmt.Errorf("Failed to remove path dynamically: %v", err)
+	}
+
+	return fmt.Sprintf("Dynamically removed path: %s ✨", path), nil
+}
+
+// showMetrics displays detailed watcher metrics
+func (sh *SystemHooks) showMetrics() (string, error) {
+	if sh.FileWatcher == nil {
+		return "No file watcher is currently running", nil
+	}
+
+	metrics := sh.FileWatcher.GetMetrics()
+	stats := sh.FileWatcher.GetStats()
+
+	result := fmt.Sprintf("📊 File Watcher Metrics:\n")
+	result += fmt.Sprintf("  Status: %v\n", stats["running"])
+	result += fmt.Sprintf("  Watched Paths: %d\n", stats["watched_paths"])
+	result += fmt.Sprintf("  Retry Count: %d\n", stats["retry_count"])
+	result += fmt.Sprintf("\n📈 Performance Metrics:\n")
+	result += fmt.Sprintf("  Events Processed: %d\n", metrics.EventsProcessed)
+	result += fmt.Sprintf("  Events Batched: %d\n", metrics.EventsBatched)
+	result += fmt.Sprintf("  Events Dropped: %d\n", metrics.EventsDropped)
+	result += fmt.Sprintf("  Events Debounced: %d\n", metrics.EventsDebounced)
+	result += fmt.Sprintf("  Events Ignored: %d\n", metrics.EventsIgnored)
+	result += fmt.Sprintf("  Paths Watched: %d\n", metrics.PathsWatched)
+	result += fmt.Sprintf("  Errors Encountered: %d\n", metrics.ErrorsEncountered)
+	result += fmt.Sprintf("  Retries Attempted: %d\n", metrics.RetriesAttempted)
+	result += fmt.Sprintf("  Uptime: %v\n", time.Since(metrics.StartTime))
+	result += fmt.Sprintf("  Last Event: %v\n", metrics.LastEventTime)
+
+	return result, nil
+}
+
+// reloadConfig reloads watcher configuration
+func (sh *SystemHooks) reloadConfig() (string, error) {
+	if sh.FileWatcher == nil {
+		return "No file watcher is currently running", nil
+	}
+
+	err := sh.FileWatcher.ReloadConfig()
+	if err != nil {
+		return "", fmt.Errorf("Failed to reload configuration: %v", err)
+	}
+
+	return "Configuration reloaded successfully ✨", nil
 }
 
 // HandleFileDeletion handles file deletion with safety checks

@@ -71,6 +71,16 @@ func GetHelpEntries() []HelpEntry {
 		{"⏸️ Pause/Resume", "pause theme", "Test custom progress bar themes"},
 		{"⏸️ Pause/Resume", "pause events", "Test event hooks and callbacks"},
 		{"⏸️ Pause/Resume", "pause http", "Test real HTTP download functionality"},
+		{"👀 File Watching", "watch start [paths...]", "Start real-time file system monitoring"},
+		{"👀 File Watching", "watch stop", "Stop file watching session"},
+		{"👀 File Watching", "watch status", "Show file watching status"},
+		{"👀 File Watching", "watch demo", "Demonstrate file watching capabilities"},
+		{"👀 File Watching", "watch debug", "Test enhanced debug features with detailed logging"},
+		{"👀 File Watching", "watch advanced", "Test enterprise-grade features: batching, prioritization, metrics, error recovery"},
+		{"👀 File Watching", "watch add <path>", "Add path dynamically to running watcher"},
+		{"👀 File Watching", "watch remove <path>", "Remove path dynamically from running watcher"},
+		{"👀 File Watching", "watch metrics", "Show detailed performance metrics"},
+		{"👀 File Watching", "watch reload", "Reload configuration without restart"},
 		{"💡 Other", "help", "Show this help"},
 		{"💡 Other", "status", "Show Ena's status"},
 		{"💡 Other", "exit", "Say goodbye to Ena"},
@@ -111,6 +121,7 @@ Let's make your computer life fun and easy together! (╹◡╹)♡`,
 	setupDownloadCommands(rootCmd, assistant)
 	setupMultiCommands(rootCmd, assistant)
 	setupPauseCommands(rootCmd, assistant)
+	setupWatchCommands(rootCmd, assistant)
 
 	return rootCmd
 }
