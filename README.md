@@ -1,298 +1,282 @@
-# 🌸 Ena - あなたの優しい仮想アシスタント 🌸
+# 🌸 Ena VA 🌸
 
-Enaちゃんは、あなたのシステムを優しく管理してくれる仮想アシスタントです。Go言語で開発され、ファイル操作、ターミナル制御、アプリケーション管理、システム健康チェックなど、あらゆるシステム操作を美しく実行します。
+Ena is a virtual assistant that manages your system with care! Developed in Go, she handles all system operations including file management, terminal control, application management, system health monitoring, and more- Ena is NOT an AI
 
-## ✨ 特徴
+## ✨ Features
 
-- 🖥️ **包括的なシステム制御**: ファイル、フォルダ、ターミナル、アプリケーションを完全制御
-- 🏥 **システム健康監視**: CPU、メモリ、ディスク使用状況をリアルタイム監視
-- 🔍 **高度な検索機能**: ファイル検索と安全な削除機能
-- ⚡ **システム操作**: 再起動、シャットダウン、スリープ機能
-- 🎨 **美しいインターフェース**: カラフルで直感的なコマンドラインインターフェース
-- 💕 **優しい日本語対応**: あたしの愛を込めた日本語メッセージ
+- 🖥️ **Comprehensive System Control**: Complete control over files, folders, terminals, and applications
+- 🏥 **System Health Monitoring**: Real-time monitoring of CPU, memory, and disk usage
+- 🔍 **Advanced Search Features**: File search and safe deletion capabilities
+- ⚡ **System Operations**: Restart, shutdown, and sleep functionality
+- 🎨 **Beautiful Interface**: Colorful and intuitive command-line interface
+- 💕 **Gentle English Support**: Loving messages with care and attention
 
-## 🚀 インストール・実行
+## 🚀 Installation & Running
 
-### 前提条件
+### Prerequisites
 
-- Go 1.21 以上
-- Linux、macOS、またはWindows
+- Go 1.21 or higher
+- Linux, macOS, or Windows
 
-### ビルド手順
+### Build Instructions
 
 ```bash
-# リポジトリをクローン
+# Clone the repository
 git clone <repository-url>
 cd Ena
 
-# 依存関係をインストール
+# Install dependencies
 go mod tidy
 
-# ビルド
+# Build
 go build -o ena cmd/main.go
 ```
 
-### 🎯 実行方法
+### 🎯 How to Run
 
-#### インタラクティブモード（推奨）
+#### Interactive Mode (Recommended)
 
 ```bash
-# Enaちゃんを起動して対話モードを開始
+# Start Ena and begin interactive mode
 ./ena
 
-# または
-./ena --help  # ヘルプを表示
+# Or
+./ena --help  # Show help
 ```
 
-#### 直接コマンド実行
+#### Direct Command Execution
 
 ```bash
-# システムの健康状態をチェック
+# Check system health status
 ./ena health
 
-# ファイルを作成
+# Create a file
 ./ena file create /path/to/file.txt
 
-# アプリを起動
+# Start an application
 ./ena app start firefox
 
-# システム情報を表示
+# Display system information
 ./ena system info
 ```
 
-#### 実行例
+#### Example Session
 
 ```bash
-# Enaちゃんを起動
+# Start Ena
 $ ./ena
 
-🌸 Enaちゃん - あなたの優しい仮想アシスタント 🌸
+🌸 EnaVA 🌸
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-こんにちは！あたしはEnaよ〜 (๑˃̵ᴗ˂̵) あなたのお手伝いをさせていただくわ！
+Hello! I'm Ena ✨ Let me help you with your system!
 
-💡 ヒント: 'help' と入力すると、あたしができることを教えてあげる！
-💡 ヒント: 'exit' と入力すると、あたしとお別れできるの...
+💡 Tip: Type 'help' to see what I can do!
+💡 Tip: Type 'exit' to say goodbye...
 
 Ena> health
-🏥 システム健康診断レポート
+🏥 System Health Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💻 CPU情報:
-   モデル: AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-   コア数: 16
-   使用率: 8.8%
-   状態: 🟢 正常
+💻 CPU Information:
+   Model: AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+   Cores: 16
+   Usage: 8.8%
+   Status: 🟢 Normal
 ...
 
 Ena> file create test.txt
-ファイル「test.txt」を作成しました！ (๑˃̵ᴗ˂̵)
+Created file "test.txt"! ✨
 
 Ena> exit
-Enaちゃん、お疲れ様でした〜 また会いましょうね！ (╹◡╹)♡
+See you next time! (╹◡╹)♡
 ```
 
-## 📖 使用方法
+## 📖 Usage
 
-### 基本操作
+### Basic Operations
 
-Enaちゃんは2つの方法で使用できます：
+Ena can be used in two ways:
 
-1. **インタラクティブモード**: `./ena` で起動し、コマンドを対話的に入力
-2. **直接実行**: `./ena <コマンド>` で特定のコマンドを直接実行
+1. **Interactive Mode**: Start with `./ena` and enter commands interactively
+2. **Direct Execution**: Run specific commands with `./ena <command>`
 
-### ヘルプとサポート
+### Help and Support
 
 ```bash
-# 全体的なヘルプを表示
+# Show general help
 ./ena --help
 
-# 特定のコマンドのヘルプを表示
+# Show help for specific commands
 ./ena file --help
 ./ena app --help
 ./ena system --help
 ```
 
-## 🎯 コマンド一覧
+## 🎯 Command Reference
 
-### 📁 ファイル操作
+### 📁 File Operations
 
 ```bash
-# ファイルを作成
+# Create a file
 ena file create /path/to/file.txt
 
-# ファイルを読み込み
+# Read a file
 ena file read /path/to/file.txt
 
-# ファイルに書き込み
+# Write to a file
 ena file write /path/to/file.txt "Hello, World!"
 
-# ファイルをコピー
+# Copy a file
 ena file copy /source.txt /dest.txt
 
-# ファイルを移動
+# Move a file
 ena file move /old.txt /new.txt
 
-# ファイルを削除
+# Delete a file
 ena file delete /path/to/file.txt
 
-# ファイル情報を表示
+# Show file information
 ena file info /path/to/file.txt
 ```
 
-### 📂 フォルダ操作
+### 📂 Folder Operations
 
 ```bash
-# フォルダを作成
+# Create a folder
 ena folder create /path/to/folder
 
-# フォルダ内容を一覧表示
+# List folder contents
 ena folder list /path/to/folder
 
-# フォルダを削除
+# Delete a folder
 ena folder delete /path/to/folder
 
-# フォルダ情報を表示
+# Show folder information
 ena folder info /path/to/folder
 ```
 
-### 🖥️ ターミナル操作
+### 🖥️ Terminal Operations
 
 ```bash
-# 新しいターミナルを開く
+# Open a new terminal
 ena terminal open
 
-# ターミナルを閉じる
+# Close terminal
 ena terminal close
 
-# コマンドを実行
+# Execute a command
 ena terminal execute "ls -la"
 
-# ディレクトリを変更
+# Change directory
 ena terminal cd /home/user
 ```
 
-### 📱 アプリケーション操作
+### 📱 Application Operations
 
 ```bash
-# アプリを起動
+# Start an application
 ena app start firefox
 
-# アプリを停止
+# Stop an application
 ena app stop firefox
 
-# アプリを再起動
+# Restart an application
 ena app restart firefox
 
-# 起動中のアプリ一覧
+# List running applications
 ena app list
 
-# アプリ情報を表示
+# Show application information
 ena app info firefox
 ```
 
-### ⚡ システム操作
+### ⚡ System Operations
 
 ```bash
-# システムを再起動
+# Restart system
 ena system restart
 
-# システムをシャットダウン
+# Shutdown system
 ena system shutdown
 
-# システムをスリープ
+# Put system to sleep
 ena system sleep
 
-# システム情報を表示
+# Show system information
 ena system info
 ```
 
-### 🏥 システム健康チェック
+### 🏥 System Health Check
 
 ```bash
-# システムの健康状態をチェック
+# Check system health status
 ena health
 ```
 
-### 🔍 検索・削除
+### 🔍 Search & Delete
 
 ```bash
-# ファイルを検索
+# Search for files
 ena search "*.txt" /home/user
 
-# ファイルを削除
+# Delete files
 ena delete /path/to/file.txt
 ```
 
-## 🏗️ アーキテクチャ
+## 🏗️ Architecture
 
 ```
 Ena/
-├── cmd/ena/              # メインエントリーポイント
-├── internal/             # 内部パッケージ
-│   ├── core/            # コアエンジン
-│   ├── hooks/           # システムフック
-│   ├── health/          # システム健康監視
-│   └── utils/           # ユーティリティ
-├── pkg/                  # 公開パッケージ
-│   ├── commands/        # コマンド定義
-│   └── system/          # システム操作
-├── Docs/                # ドキュメント
-└── Tests/               # テストファイル
+├── cmd/                    # Main entry point
+├── internal/               # Internal packages
+│   ├── core/              # Core engine
+│   ├── hooks/             # System hooks
+│   ├── health/            # System health monitoring
+│   └── utils/             # Utilities
+├── pkg/                    # Public packages
+│   ├── commands/          # Command definitions
+│   └── system/            # System operations
+├── Docs/                   # Documentation
+└── Tests/                  # Test files
 ```
 
-## 🛡️ 安全性
+## 🛡️ Safety Features
 
-- **安全モード**: デフォルトで有効化されており、危険な操作前に確認を求めます
-- **危険コマンド検出**: システムに害を与える可能性のあるコマンドを自動検出
-- **エラーハンドリング**: 包括的なエラーハンドリングとユーザーフレンドリーなエラーメッセージ
+- **Safe Mode**: Enabled by default, asks for confirmation before dangerous operations
+- **Dangerous Command Detection**: Automatically detects commands that could harm the system
+- **Error Handling**: Comprehensive error handling with user-friendly error messages
 
-## 🎨 カスタマイズ
+## 🎨 Customization
 
-Enaちゃんの外観や動作は、設定ファイルや環境変数でカスタマイズできます。
+Ena's appearance and behavior can be customized through configuration files and environment variables.
 
-## 🔧 トラブルシューティング
+## 🔧 Troubleshooting
 
-### よくある問題
+### Common Issues
 
-**Q: ビルド時にエラーが発生します**
+**Q: Build errors occur**
 ```bash
-# 依存関係を再インストール
+# Reinstall dependencies
 go clean -modcache
 go mod tidy
 go build -o ena cmd/main.go
 ```
 
-**Q: ターミナルが開きません**
-- システムにインストールされているターミナルエミュレータを確認
-- 対応: gnome-terminal, xterm, konsole, xfce4-terminal, alacritty, kitty
+**Q: Terminal won't open**
+- Check which terminal emulator is installed on your system
+- Supported: gnome-terminal, xterm, konsole, xfce4-terminal, alacritty, kitty
 
-**Q: アプリが起動しません**
-- アプリ名が正しいか確認（例: firefox, chrome, vim）
-- アプリがシステムにインストールされているか確認
+**Q: Application won't start**
+- Verify the application name is correct (e.g., firefox, chrome, vim)
+- Check if the application is installed on your system
 
-**Q: システム操作で権限エラーが発生します**
+**Q: Permission errors with system operations**
 ```bash
-# sudo権限が必要な場合があります
+# May require sudo privileges
 sudo ./ena system restart
 ```
 
-## 🤝 コントリビューション
-
-Enaちゃんをより良くするためのコントリビューションを歓迎します！
-
-1. リポジトリをフォーク
-2. フィーチャーブランチを作成
-3. 変更をコミット
-4. プルリクエストを送信
-
-## 📄 ライセンス
-
-このプロジェクトはMITライセンスの下で公開されています。
-
-## 💕 作者
 
 **Author**: KleaSCM  
 **Email**: KleaSCM@gmail.com
 
 ---
-
-Enaちゃんと一緒に、あなたのコンピューターライフを楽しくしましょうね！ (╹◡╹)♡

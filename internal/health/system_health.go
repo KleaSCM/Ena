@@ -218,7 +218,7 @@ func (sh *SystemHealth) GetOverallHealthStatus() string {
 	if err == nil {
 		if vmStat.UsedPercent > 95 {
 			healthy = false
-			issues = append(issues, "Memory usage is at critical level")
+			issues = append(issues, "Going to Crash soon! Memory usage is at critical level")
 		}
 	}
 
@@ -228,7 +228,7 @@ func (sh *SystemHealth) GetOverallHealthStatus() string {
 		usagePercent := (float64(diskStat.Used) / float64(diskStat.Total)) * 100
 		if usagePercent > 95 {
 			healthy = false
-			issues = append(issues, "Disk space is at critical level")
+			issues = append(issues, "At 95% of Disk space! You should delete some files!")
 		}
 	}
 
@@ -236,7 +236,7 @@ func (sh *SystemHealth) GetOverallHealthStatus() string {
 		report = append(report, "🟢 System is healthy! ✨")
 		report = append(report, "   All major components are operating normally.")
 	} else {
-		report = append(report, "🔴 System needs attention! 😅")
+		report = append(report, "🔴 System is borked! 😅")
 		report = append(report, "   The following issues were detected:")
 		for _, issue := range issues {
 			report = append(report, fmt.Sprintf("   • %s", issue))
